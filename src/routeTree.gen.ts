@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as ChannelsRouteImport } from './routes/channels'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SalesRouteImport } from './routes/sales'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const InboxRoute = InboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SalesRoute = SalesRouteImport.update({
   id: '/sales',
   path: '/sales',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
   '/inbox': typeof InboxRoute
+  '/pricing': typeof PricingRoute
   '/sales': typeof SalesRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
   '/inbox': typeof InboxRoute
+  '/pricing': typeof PricingRoute
   '/sales': typeof SalesRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,16 @@ export interface FileRoutesById {
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
   '/inbox': typeof InboxRoute
+  '/pricing': typeof PricingRoute
   '/sales': typeof SalesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agent' | '/channels' | '/inbox' | '/sales'
+  fullPaths: '/' | '/agent' | '/channels' | '/inbox' | '/pricing' | '/sales'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agent' | '/channels' | '/inbox' | '/sales'
-  id: '__root__' | '/' | '/agent' | '/channels' | '/inbox' | '/sales'
+  to: '/' | '/agent' | '/channels' | '/inbox' | '/pricing' | '/sales'
+  id:
+    '__root__' | '/' | '/agent' | '/channels' | '/inbox' | '/pricing' | '/sales'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +86,7 @@ export interface RootRouteChildren {
   AgentRoute: typeof AgentRoute
   ChannelsRoute: typeof ChannelsRoute
   InboxRoute: typeof InboxRoute
+  PricingRoute: typeof PricingRoute
   SalesRoute: typeof SalesRoute
 }
 
@@ -109,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales': {
       id: '/sales'
       path: '/sales'
@@ -124,6 +142,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentRoute: AgentRoute,
   ChannelsRoute: ChannelsRoute,
   InboxRoute: InboxRoute,
+  PricingRoute: PricingRoute,
   SalesRoute: SalesRoute,
 }
 export const routeTree = rootRouteImport
