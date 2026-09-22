@@ -158,3 +158,46 @@
     color: var(--color-foreground);
   }
 }
+
+.dark {
+  --background: oklch(0.16 0.03 265);
+  --foreground: oklch(0.97 0.006 250);
+  --card: oklch(0.21 0.035 266);
+  --card-foreground: oklch(0.97 0.006 250);
+  --popover: oklch(0.21 0.035 266);
+  --popover-foreground: oklch(0.97 0.006 250);
+  --primary: oklch(0.66 0.19 288);
+  --primary-glow: oklch(0.74 0.14 205);
+  --primary-foreground: oklch(0.16 0.03 265);
+  --secondary: oklch(0.26 0.035 266);
+  --secondary-foreground: oklch(0.97 0.006 250);
+  --muted: oklch(0.26 0.035 266);
+  --muted-foreground: oklch(0.72 0.025 262);
+  --accent: oklch(0.3 0.04 268);
+  --accent-foreground: oklch(0.97 0.006 250);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.66 0.19 288);
+  --sidebar: oklch(0.19 0.032 266);
+  --sidebar-foreground: oklch(0.97 0.006 250);
+  --sidebar-accent: oklch(0.28 0.04 268);
+  --sidebar-accent-foreground: oklch(0.97 0.006 250);
+  --sidebar-border: oklch(1 0 0 / 12%);
+}
+
+:root {
+  --sidebar: oklch(0.975 0.008 252);
+  --sidebar-accent: oklch(0.93 0.03 258);
+  --sidebar-accent-foreground: oklch(0.26 0.04 270);
+}
+
+@utility font-display {
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+@layer base {
+  body {
+    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  }
+}
