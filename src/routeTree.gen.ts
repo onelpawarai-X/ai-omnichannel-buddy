@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as ChannelsRouteImport } from './routes/channels'
+import { Route as InboxRouteImport } from './routes/inbox'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ChannelsRoute = ChannelsRouteImport.update({
   path: '/channels',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
+  '/inbox': typeof InboxRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
+  '/inbox': typeof InboxRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agent': typeof AgentRoute
   '/channels': typeof ChannelsRoute
+  '/inbox': typeof InboxRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agent' | '/channels'
+  fullPaths: '/' | '/agent' | '/channels' | '/inbox'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agent' | '/channels'
-  id: '__root__' | '/' | '/agent' | '/channels'
+  to: '/' | '/agent' | '/channels' | '/inbox'
+  id: '__root__' | '/' | '/agent' | '/channels' | '/inbox'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentRoute: typeof AgentRoute
   ChannelsRoute: typeof ChannelsRoute
+  InboxRoute: typeof InboxRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChannelsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentRoute: AgentRoute,
   ChannelsRoute: ChannelsRoute,
+  InboxRoute: InboxRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
