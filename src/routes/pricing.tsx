@@ -65,7 +65,7 @@ function Pricing() {
             )}
           >
             {p.popular && (
-              <span className="absolute inset-x-0 top-0 h-1 bg-[var(--gradient-primary)]" />
+              <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundImage: "var(--gradient-primary)" }} />
             )}
             <CardContent className="p-7">
               <div className="flex items-center justify-between">
