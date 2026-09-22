@@ -35,7 +35,7 @@ export const Route = createFileRoute("/agent")({
       },
     ],
   }),
-  component: AgentTraining;
+  component: AgentTraining,
 });
 
 type Faq = { q: string; a: string };
