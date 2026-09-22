@@ -77,11 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Nexa Flow — Multi-channel AI automation" },
+      {
+        name: "description",
+        content:
+          "Connect Messenger, Instagram, WhatsApp, Telegram and live chat to one AI agent with a unified inbox and sales dashboard.",
+      },
+      { name: "author", content: "Nexa Flow" },
+      { property: "og:title", content: "Nexa Flow — Multi-channel AI automation" },
+      {
+        property: "og:description",
+        content: "One AI agent for every customer channel, in Bangla and English.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
