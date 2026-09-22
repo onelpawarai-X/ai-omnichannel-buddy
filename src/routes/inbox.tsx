@@ -39,7 +39,7 @@ export const Route = createFileRoute("/inbox")({
 function InboxPage() {
   const { t } = useI18n();
   const [list, setList] = useState<Conversation[]>(demoConversations);
-  const [activeId, setActiveId] = useState(demoConversations[0].id);
+  const [activeId, setActiveId] = useState(demoConversations[0]!.id);
   const [filter, setFilter] = useState<ChannelId | "all">("all");
   const [draft, setDraft] = useState("");
 
@@ -47,7 +47,7 @@ function InboxPage() {
     () => (filter === "all" ? list : list.filter((c) => c.channel === filter)),
     [list, filter],
   );
-  const active = list.find((c) => c.id === activeId) ?? filtered[0] ?? list[0];
+  const active = (list.find((c) => c.id === activeId) ?? filtered[0] ?? list[0])!;
 
   const send = () => {
     const text = draft.trim();
@@ -87,7 +87,7 @@ function InboxPage() {
         <Card className="max-h-[70vh] overflow-y-auto border-border/70 bg-card/80 p-2">
           {filtered.map((c) => {
             const ch = channels.find((x) => x.id === c.channel);
-            const last = c.messages[c.messages.length - 1];
+            const last = c.messages[c.messages.length - 1]!;
             return (
               <button
                 key={c.id}

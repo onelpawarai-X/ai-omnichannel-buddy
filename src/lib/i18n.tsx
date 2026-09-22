@@ -130,7 +130,7 @@ export const dict: Dict = {
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (k: keyof typeof dict) => string };
 
-const I18nContext = createContext<Ctx>({ lang: "en", setLang: () => {}, t: (k) => dict[k].en });
+const I18nContext = createContext<Ctx>({ lang: "en", setLang: () => {}, t: (k) => dict[k]?.en ?? String(k) });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
@@ -146,7 +146,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(
-    () => ({ lang, setLang, t: (k) => dict[k]?.[lang] ?? String(k) }),
+    () => ({ lang, setLang, t: (k) => (dict[k] ? dict[k][lang] : String(k)) }),
     [lang, setLang],
   );
 
