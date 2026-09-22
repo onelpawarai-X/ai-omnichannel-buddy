@@ -46,7 +46,7 @@ export function ChatSimulator({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="flex items-center gap-3 border-b border-border/70 px-4 py-4" style={{ backgroundImage: "var(--gradient-primary)" }}>
+      <div className="flex items-center gap-3 border-b border-border/70 px-4 py-4" style={{ backgroundColor: "var(--primary)", backgroundImage: "var(--gradient-primary)" }}>
         <span className="flex size-9 items-center justify-center rounded-full bg-background/20">
           <Sparkle className="size-4 text-primary-foreground" />
         </span>

@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="relative mx-auto flex max-w-[1500px]">
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-sidebar/70 px-4 py-6 backdrop-blur-xl lg:flex">
           <Link to="/" className="mb-8 flex items-center gap-3 px-2">
-            <span className="flex size-10 items-center justify-center rounded-xl shadow-[var(--shadow-glow)]" style={{ backgroundImage: "var(--gradient-primary)" }}>
+            <span className="flex size-10 items-center justify-center rounded-xl shadow-[var(--shadow-glow)]" style={{ backgroundColor: "var(--primary)", backgroundImage: "var(--gradient-primary)" }}>
               <Sparkle className="size-5 text-primary-foreground" />
             </span>
             <span>
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="flex items-center gap-3 lg:hidden">
-              <span className="flex size-9 items-center justify-center rounded-lg" style={{ backgroundImage: "var(--gradient-primary)" }}>
+              <span className="flex size-9 items-center justify-center rounded-lg" style={{ backgroundColor: "var(--primary)", backgroundImage: "var(--gradient-primary)" }}>
                 <Sparkle className="size-4 text-primary-foreground" />
               </span>
               <span className="font-display text-sm font-semibold">{t("brand")}</span>
