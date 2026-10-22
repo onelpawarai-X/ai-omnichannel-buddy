@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { Bot, User } from "@/icons/lucide-compat";
+import { Bot, User, Image as ImageIcon, Film, Music, FileText } from "@/icons/lucide-compat";
 import type { ChatMessage as ChatMessageData } from "../../../stores/chat-store";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { ToolCallCard } from "./ToolCallCard";
@@ -23,6 +23,30 @@ export function ChatMessage({
         {isUser ? <User size={13} /> : <Bot size={13} />}
       </div>
       <div className="min-w-0 flex-1 space-y-2">
+        {isUser && message.attachments && message.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {message.attachments.map((attachment, index) => {
+              const Icon =
+                attachment.kind === "image"
+                  ? ImageIcon
+                  : attachment.kind === "video"
+                    ? Film
+                    : attachment.kind === "audio"
+                      ? Music
+                      : FileText;
+              return (
+                <span
+                  key={`${attachment.name}-${index}`}
+                  className="flex max-w-[14rem] items-center gap-1 rounded-md border border-border bg-bg-2 px-1.5 py-0.5 text-[10px] text-fg-2"
+                  title={attachment.name}
+                >
+                  <Icon size={10} className="shrink-0 text-accent" aria-hidden />
+                  <span className="truncate">{attachment.name}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
         {message.text && (isUser ? (
           <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-fg">
             {message.text}

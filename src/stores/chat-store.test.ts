@@ -45,6 +45,12 @@ vi.mock("../services/agent/direct-llm-transport", () => ({ makeDirectBYOKClient:
 vi.mock("../services/agent/editing-session", () => ({ EditingSession: class { committed = true; } }));
 vi.mock("../services/agent/editing-tools", () => ({ editingToolDefs: () => [], editingToolReadOnly: () => false, executeEditingTool: vi.fn(), EDITING_SYSTEM: "system" }));
 vi.mock("./ai-connection-store", () => ({ useAIConnectionStore: { getState: () => h.connection } }));
+vi.mock("./ai-provider-catalog", () => ({
+  isKnownProviderId: (value: unknown) =>
+    typeof value === "string" && ["openai", "anthropic", "zyraxon", "compatible"].includes(value),
+  isKeyless: (value: string) => value === "compatible" || value === "zyraxon",
+  resolveWire: (value: string) => (value === "anthropic" ? "anthropic" : "openai"),
+}));
 
 vi.mock("./settings-store", () => ({
   useSettingsStore: {
@@ -314,13 +320,13 @@ describe("chat-store", () => {
     expect(store().error).toMatch(/model id/i);
   });
 
-  it("requires the user to choose an API format", async () => {
+  it("requires the user to choose a provider", async () => {
     h.connection.provider = "";
 
     await store().send("hello");
 
     expect(h.runTurn).not.toHaveBeenCalled();
-    expect(store().error).toMatch(/api format/i);
+    expect(store().error).toMatch(/choose a provider/i);
   });
 
   it("runs against an Anthropic-compatible endpoint", async () => {

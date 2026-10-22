@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { subscribeWithSelector, persist } from "zustand/middleware";
-import { onSessionLock } from "../services/secure-storage";
 
 export interface ServiceConfig {
   readonly id: string;
@@ -16,12 +15,6 @@ export interface ServiceConfig {
  */
 export const SERVICE_REGISTRY: readonly ServiceConfig[] = [
   {
-    id: "elevenlabs",
-    label: "ElevenLabs",
-    description: "AI voice generation and text-to-speech",
-    docsUrl: "https://elevenlabs.io/docs/api-reference",
-  },
-  {
     id: "openai-compatible",
     label: "OpenAI-compatible endpoint",
     description: "Any OpenAI-compatible API host; API key optional",
@@ -33,23 +26,9 @@ export const SERVICE_REGISTRY: readonly ServiceConfig[] = [
     description: "Any Anthropic Messages-compatible API host; API key optional",
     keyOptional: true,
   },
-  {
-    id: "kie-ai",
-    label: "Kie.ai",
-    description: "AI aggregator for video/image generation, upscaling, and editing",
-    docsUrl: "https://kie.ai",
-  },
-  {
-    id: "freepik",
-    label: "Freepik",
-    description: "AI aggregator for image generation, vectors, and creative assets",
-    docsUrl: "https://www.freepik.com/api",
-  },
 ] as const;
 
-export type TtsProvider = "elevenlabs";
 export type LlmProvider = "openai-compatible" | "anthropic-compatible";
-export type AggregatorProvider = "kie-ai" | "freepik";
 export type SettingsTab = "general" | "ai-editor" | "api-keys" | "mcp";
 
 function isLlmProvider(value: unknown): value is LlmProvider {
@@ -63,13 +42,10 @@ export interface SettingsState {
   language: string;
 
   // AI/Service preferences
-  defaultTtsProvider: TtsProvider;
   defaultLlmProvider: LlmProvider | null;
   /** User-defined compatible endpoint and model for the agent chat. */
   llmBaseUrl: string;
   llmModel: string;
-  defaultAggregator: AggregatorProvider;
-  elevenLabsModel: string;
   favoriteVoices: Array<{ voiceId: string; name: string; previewUrl?: string }>;
   favoriteModels: Array<{ modelId: string; name: string }>;
   configuredServices: string[]; // IDs of services with stored API keys
@@ -83,8 +59,6 @@ export interface SettingsState {
   agentDryRun: boolean;
 
   // Session-scoped API caches (cleared on session lock, not persisted)
-  cachedElevenLabsVoices: Array<{ voice_id: string; name: string; category: string; labels: Record<string, string>; preview_url?: string }> | null;
-  cachedElevenLabsModels: Array<{ model_id: string; name: string; description?: string; can_do_text_to_speech?: boolean; languages?: Array<{ language_id: string; name: string }> }> | null;
 
   // Settings dialog state
   settingsOpen: boolean;
@@ -94,24 +68,18 @@ export interface SettingsState {
   setAutoSave: (enabled: boolean) => void;
   setAutoSaveInterval: (minutes: number) => void;
   setLanguage: (lang: string) => void;
-  setDefaultTtsProvider: (provider: TtsProvider) => void;
   setDefaultLlmProvider: (provider: LlmProvider | null) => void;
   setLlmBaseUrl: (url: string) => void;
   setLlmModel: (model: string) => void;
   setMcpAutoAllowTrustedLocal: (enabled: boolean) => void;
   setAgentAutoConfirm: (enabled: boolean) => void;
   setAgentDryRun: (enabled: boolean) => void;
-  setDefaultAggregator: (provider: AggregatorProvider) => void;
-  setElevenLabsModel: (model: string) => void;
   addFavoriteVoice: (voice: { voiceId: string; name: string; previewUrl?: string }) => void;
   removeFavoriteVoice: (voiceId: string) => void;
   addFavoriteModel: (model: { modelId: string; name: string }) => void;
   removeFavoriteModel: (modelId: string) => void;
   addConfiguredService: (serviceId: string) => void;
   removeConfiguredService: (serviceId: string) => void;
-  setCachedElevenLabsVoices: (voices: SettingsState["cachedElevenLabsVoices"]) => void;
-  setCachedElevenLabsModels: (models: SettingsState["cachedElevenLabsModels"]) => void;
-  clearApiCaches: () => void;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
 }
@@ -124,12 +92,9 @@ export const useSettingsStore = create<SettingsState>()(
         autoSaveInterval: 5,
         language: "en",
 
-        defaultTtsProvider: "elevenlabs" as TtsProvider,
         defaultLlmProvider: null,
         llmBaseUrl: "",
         llmModel: "",
-        defaultAggregator: "kie-ai" as AggregatorProvider,
-        elevenLabsModel: "eleven_v3",
         favoriteVoices: [],
         favoriteModels: [],
         configuredServices: [],
@@ -138,8 +103,6 @@ export const useSettingsStore = create<SettingsState>()(
         agentAutoConfirm: false,
         agentDryRun: false,
 
-        cachedElevenLabsVoices: null,
-        cachedElevenLabsModels: null,
 
         settingsOpen: false,
         settingsTab: "general" as SettingsTab,
@@ -151,8 +114,6 @@ export const useSettingsStore = create<SettingsState>()(
 
         setLanguage: (lang: string) => set({ language: lang }),
 
-        setDefaultTtsProvider: (provider: TtsProvider) =>
-          set({ defaultTtsProvider: provider }),
 
         setDefaultLlmProvider: (provider: LlmProvider | null) =>
           set({ defaultLlmProvider: provider }),
@@ -168,11 +129,7 @@ export const useSettingsStore = create<SettingsState>()(
 
         setAgentDryRun: (enabled: boolean) => set({ agentDryRun: enabled }),
 
-        setDefaultAggregator: (provider: AggregatorProvider) =>
-          set({ defaultAggregator: provider }),
 
-        setElevenLabsModel: (model: string) =>
-          set({ elevenLabsModel: model }),
 
         addFavoriteVoice: (voice) => {
           const { favoriteVoices } = get();
@@ -212,14 +169,7 @@ export const useSettingsStore = create<SettingsState>()(
           });
         },
 
-        setCachedElevenLabsVoices: (voices) =>
-          set({ cachedElevenLabsVoices: voices }),
 
-        setCachedElevenLabsModels: (models) =>
-          set({ cachedElevenLabsModels: models }),
-
-        clearApiCaches: () =>
-          set({ cachedElevenLabsVoices: null, cachedElevenLabsModels: null }),
 
         openSettings: (tab?: SettingsTab) =>
           set({
@@ -238,8 +188,7 @@ export const useSettingsStore = create<SettingsState>()(
           if (version < 3 && (!next.llmModel || next.llmModel === "gpt-4o")) {
             next.llmModel = "gpt-5.6-sol";
           }
-          if (version < 5 || next.defaultTtsProvider === "piper") {
-            next.defaultTtsProvider = "elevenlabs";
+          if (version < 5) {
           }
           const previousProvider = next.defaultLlmProvider;
           if (!isLlmProvider(previousProvider)) {
@@ -268,12 +217,9 @@ export const useSettingsStore = create<SettingsState>()(
           autoSave: state.autoSave,
           autoSaveInterval: state.autoSaveInterval,
           language: state.language,
-          defaultTtsProvider: state.defaultTtsProvider,
           defaultLlmProvider: state.defaultLlmProvider,
           llmBaseUrl: state.llmBaseUrl,
           llmModel: state.llmModel,
-          defaultAggregator: state.defaultAggregator,
-          elevenLabsModel: state.elevenLabsModel,
           favoriteVoices: state.favoriteVoices,
           favoriteModels: state.favoriteModels,
           configuredServices: state.configuredServices,
@@ -286,7 +232,3 @@ export const useSettingsStore = create<SettingsState>()(
   ),
 );
 
-// Clear API caches when the secure session locks
-onSessionLock(() => {
-  useSettingsStore.getState().clearApiCaches();
-});

@@ -13,6 +13,8 @@ import type {
   HumanoidRigRequest,
   HumanoidRigResult,
   TextOverlayOptions,
+  GenerateImageOptions,
+  GeneratedImageRef,
   ShapeOverlayOptions,
   OverlayRef,
   OverlayKind,
@@ -92,6 +94,35 @@ function inferName(url: string, mime: string): string {
   }
   const ext = (mime.split("/")[1] ?? "bin").replace("jpeg", "jpg");
   return `media-${Date.now()}.${ext}`;
+}
+
+const IMAGE_SIZE_BY_ASPECT: Record<string, readonly [number, number]> = {
+  "1:1": [1024, 1024],
+  "16:9": [1280, 720],
+  "9:16": [720, 1280],
+  "4:3": [1024, 768],
+  "3:4": [768, 1024],
+  "3:2": [1200, 800],
+  "2:3": [800, 1200],
+  "21:9": [1536, 658],
+};
+
+/** Accept "16:9", "1280x720", or nothing (square). */
+function imageSize(size?: string): { width: number; height: number } {
+  const value = size?.trim();
+  if (value) {
+    const aspect = IMAGE_SIZE_BY_ASPECT[value];
+    if (aspect) return { width: aspect[0], height: aspect[1] };
+    const match = /^(\d{2,5})x(\d{2,5})$/i.exec(value);
+    if (match) {
+      const width = Number(match[1]);
+      const height = Number(match[2]);
+      if (width >= 64 && height >= 64 && width <= 4096 && height <= 4096) {
+        return { width, height };
+      }
+    }
+  }
+  return { width: 1024, height: 1024 };
 }
 
 function projectRef(project: Project): ProjectRef {
@@ -250,17 +281,36 @@ export class LiveEditorHost implements EditingHost {
     options?: { name?: string },
   ): Promise<ImportedMediaRef> {
     this.requireOpenProject();
+    let body: BlobPart;
+    let contentType = "";
     const bridge = window.openreel?.media?.fetchUrl;
-    if (typeof bridge !== "function") {
-      throw new Error("Media download is only available in the desktop app");
+    if (typeof bridge === "function") {
+      const res = await bridge({ url });
+      if (!res.ok) {
+        throw new Error(res.error ?? `Download failed: HTTP ${res.status}`);
+      }
+      body = res.body;
+      contentType = res.contentType;
+    } else {
+      // In the browser there is no main-process fetcher, so fetch the bytes
+      // directly. Public stock hosts must allow CORS for this to succeed.
+      let response: Response;
+      try {
+        response = await fetch(url, { credentials: "omit", redirect: "follow" });
+      } catch {
+        throw new Error(
+          `Could not download ${url}. The host blocked the browser request (CORS) or the URL is unreachable.`,
+        );
+      }
+      if (!response.ok) {
+        throw new Error(`Download failed: HTTP ${response.status}`);
+      }
+      body = await response.blob();
+      contentType = response.headers.get("content-type") ?? "";
     }
-    const res = await bridge({ url });
-    if (!res.ok) {
-      throw new Error(res.error ?? `Download failed: HTTP ${res.status}`);
-    }
-    const mime = (res.contentType.split(";")[0] ?? "").trim() || MIME_BY_EXT[extFromUrl(url)] || "application/octet-stream";
+    const mime = (contentType.split(";")[0] ?? "").trim() || MIME_BY_EXT[extFromUrl(url)] || "application/octet-stream";
     const name = options?.name ?? inferName(url, mime);
-    const file = new File([res.body], name, { type: mime });
+    const file = new File([body], name, { type: mime });
     const result = await useProjectStore.getState().importMedia(file);
     if (!result.success || !result.actionId) {
       throw new Error(result.error?.message ?? "Media import failed");
@@ -276,6 +326,45 @@ export class LiveEditorHost implements EditingHost {
       durationSec: item?.metadata?.duration ?? 0,
       width: item?.metadata?.width,
       height: item?.metadata?.height,
+    };
+  }
+
+  /**
+   * Keyless text-to-image through Pollinations, then import the bytes into the
+   * media library. No API key, so the agent can illustrate a request without
+   * the user configuring an image vendor.
+   */
+  async generateImage(options: GenerateImageOptions): Promise<GeneratedImageRef> {
+    this.requireOpenProject();
+    const { width, height } = imageSize(options.size);
+    const seed = options.seed ?? Math.floor(Math.random() * 1_000_000);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(options.prompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    let response: Response;
+    try {
+      response = await fetch(url, { credentials: "omit", redirect: "follow" });
+    } catch {
+      throw new Error("Could not reach the image service. Check the network connection.");
+    }
+    if (!response.ok) {
+      throw new Error(`Image generation failed: HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("The image service returned an empty image.");
+    const name = options.name ?? `generated-${Date.now()}.png`;
+    const file = new File([blob], name, { type: blob.type || "image/png" });
+    const result = await useProjectStore.getState().importMedia(file);
+    if (!result.success || !result.actionId) {
+      throw new Error(result.error?.message ?? "Image import failed");
+    }
+    const mediaId = result.actionId;
+    const item = useProjectStore
+      .getState()
+      .project.mediaLibrary.items.find((m) => m.id === mediaId);
+    return {
+      mediaId,
+      name,
+      width: item?.metadata?.width ?? width,
+      height: item?.metadata?.height ?? height,
     };
   }
 

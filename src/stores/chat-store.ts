@@ -8,12 +8,14 @@ import type {
   ToolCall,
   ToolResult,
   LoopMessage,
+  LoopUserAttachment,
 } from "@openreel/agent";
 import { runExclusive } from "../services/agent/host-singleton";
 import { makeDirectBYOKClient, validateAIEndpoint } from "../services/agent/direct-llm-transport";
 import { EditingSession } from "../services/agent/editing-session";
 import { editingToolDefs, editingToolReadOnly, executeEditingTool, EDITING_SYSTEM } from "../services/agent/editing-tools";
 import { useAIConnectionStore } from "./ai-connection-store";
+import { isKeyless, isKnownProviderId, resolveWire } from "./ai-provider-catalog";
 import {
   conversationTitle,
   useChatHistoryStore,
@@ -33,11 +35,17 @@ export interface ToolCallView {
   readonly result?: ToolResult;
 }
 
+export interface ChatAttachmentView {
+  readonly name: string;
+  readonly kind: LoopUserAttachment["kind"];
+}
+
 export interface ChatMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly text: string;
   readonly toolCalls: ToolCallView[];
+  readonly attachments?: readonly ChatAttachmentView[];
   readonly notice?: string;
 }
 
@@ -66,7 +74,7 @@ interface ChatState {
   currentConversationId: string | null;
   conversationStartedAt: number | null;
 
-  send: (text: string) => Promise<void>;
+  send: (text: string, attachments?: readonly LoopUserAttachment[]) => Promise<void>;
   resolveConfirm: (decision: ConfirmDecision) => void;
   stop: () => void;
   undoLastTurn: () => Promise<void>;
@@ -138,9 +146,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   currentConversationId: null,
   conversationStartedAt: null,
 
-  send: async (text: string) => {
+  send: async (text: string, attachments?: readonly LoopUserAttachment[]) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    const files = attachments ?? [];
+    if (!trimmed && !files.length) return;
     const current = get();
     if (current.status === "running" || current.status === "awaiting_confirm") {
       return;
@@ -157,11 +166,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     const { provider, model, baseUrl: inputBaseUrl, apiKey } = useAIConnectionStore.getState();
-    if (!["openai", "anthropic", "compatible"].includes(provider)) { set({ error: "Choose an API format in Settings → AI Editor." }); return; }
+    if (!isKnownProviderId(provider)) { set({ error: "Choose a provider in Settings → AI Editor." }); return; }
     if (!model.trim()) { set({ error: "Enter a model ID in Settings → AI Editor." }); return; }
     let baseUrl: string;
     try { baseUrl = validateAIEndpoint(inputBaseUrl); } catch { set({ error: "Enter a valid HTTPS endpoint, or HTTP on localhost." }); return; }
-    if (provider !== "compatible" && !apiKey) {
+    if (!isKeyless(provider) && !apiKey) {
       set({
         error: "Add your session API key in Settings → AI Editor before sending an edit request.",
       });
@@ -176,6 +185,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: "user",
       text: trimmed,
       toolCalls: [],
+      ...(files.length
+        ? { attachments: files.map((f) => ({ name: f.name ?? f.kind, kind: f.kind })) }
+        : {}),
     };
     const assistantMessage: ChatMessage = {
       id: genId(),
@@ -189,7 +201,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set((state) => ({
       messages: [...state.messages, userMessage, assistantMessage],
-      conversation: [...state.conversation, { role: "user", content: trimmed }],
+      conversation: [
+        ...state.conversation,
+        files.length
+          ? { role: "user", content: trimmed, attachments: files }
+          : { role: "user", content: trimmed },
+      ],
       status: "running",
       error: null,
       abortController: controller,
@@ -269,7 +286,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ status: "error", error: error instanceof Error ? error.message : "Invalid connection settings", abortController: null });
       return;
     }
-    const tools = editingToolDefs(provider === "anthropic" ? "anthropic" : "openai");
+    const tools = editingToolDefs(resolveWire(provider));
     const autoConfirm = useSettingsStore.getState().agentAutoConfirm;
     const dryRun = useSettingsStore.getState().agentDryRun;
 

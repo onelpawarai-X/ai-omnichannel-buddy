@@ -6,7 +6,7 @@ import { ToolcraftNumberInputControl } from "@openreel/ui";
 import { ToolcraftSelectControl as Selector } from "@openreel/ui";
 import { ToolcraftText as Text } from "@openreel/ui";
 import { ToolcraftTextInputControl as TextInput } from "@openreel/ui";
-import { useSettingsStore, SERVICE_REGISTRY, type TtsProvider, type LlmProvider, type AggregatorProvider } from "../../../stores/settings-store";
+import { useSettingsStore, SERVICE_REGISTRY, type LlmProvider } from "../../../stores/settings-store";
 import { useProjectStore } from "../../../stores/project-store";
 import { EDITING_FRAME_RATE_OPTIONS } from "../editing-frame-rate";
 
@@ -37,19 +37,14 @@ export const GeneralPanel: React.FC = () => {
   const {
     autoSave,
     autoSaveInterval,
-    defaultTtsProvider,
     defaultLlmProvider,
     llmBaseUrl,
     llmModel,
-    defaultAggregator,
-    configuredServices,
     setAutoSave,
     setAutoSaveInterval,
-    setDefaultTtsProvider,
     setDefaultLlmProvider,
     setLlmBaseUrl,
     setLlmModel,
-    setDefaultAggregator,
   } = useSettingsStore();
 
   const projectWidth = useProjectStore((s) => s.project.settings.width);
@@ -91,18 +86,10 @@ export const GeneralPanel: React.FC = () => {
     }
   }, [draftWidth, draftHeight, applyDimensions]);
 
-  const ttsProviders = SERVICE_REGISTRY.filter((s) => s.id === "elevenlabs");
-
   const llmProviders = SERVICE_REGISTRY.filter(
     (s) => s.id === "openai-compatible" || s.id === "anthropic-compatible",
   );
 
-  const aggregatorProviders = SERVICE_REGISTRY.filter(
-    (s) =>
-      s.id === "kie-ai" ||
-      s.id === "freepik" ||
-      configuredServices.includes(s.id),
-  );
   return (
     <div className="space-y-6 pb-4">
       {/* Project Composition */}
@@ -325,21 +312,6 @@ export const GeneralPanel: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Text type="supporting" color="secondary" className="text-sm">
-              Text to Speech/Voice To Speech/Sound Effects
-            </Text>
-            <Selector
-              label="Text to Speech provider"
-              isLabelHidden
-              size="md"
-              width={180}
-              value={defaultTtsProvider}
-              onChange={(value) => setDefaultTtsProvider(value as TtsProvider)}
-              options={ttsProviders.map((s) => ({ label: s.label, value: s.id }))}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Text type="supporting" color="secondary" className="text-sm">
               Creative tools API format
             </Text>
             <Selector
@@ -400,25 +372,6 @@ export const GeneralPanel: React.FC = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div>
-              <Text type="supporting" color="secondary" className="text-sm">
-                AI Aggregator
-              </Text>
-              <Text type="supporting" color="secondary" className="mt-0.5 text-xs">
-                Video/image generation, upscaling, and creative AI tools
-              </Text>
-            </div>
-            <Selector
-              label="AI Aggregator provider"
-              isLabelHidden
-              size="md"
-              width={180}
-              value={defaultAggregator}
-              onChange={(value) => setDefaultAggregator(value as AggregatorProvider)}
-              options={aggregatorProviders.map((s) => ({ label: s.label, value: s.id }))}
-            />
-          </div>
         </div>
       </div>
     </div>

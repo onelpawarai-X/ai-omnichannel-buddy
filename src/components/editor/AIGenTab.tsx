@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import {
-  Mic,
   Subtitles,
   Palette,
   Music,
@@ -15,15 +14,12 @@ import { ToolcraftButton as Button } from "@openreel/ui";
 import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
 import { ToolcraftText as Text } from "@openreel/ui";
 import { AutoCaptionPanel } from "./inspector/AutoCaptionPanel";
-import { TextToSpeechPanel } from "./inspector/TextToSpeechPanel";
 import { FilterPresetsPanel } from "./inspector/FilterPresetsPanel";
 import { MusicLibraryPanel } from "./inspector/MusicLibraryPanel";
 import { TemplatesBrowserPanel } from "./inspector/TemplatesBrowserPanel";
 import { MultiCameraPanel } from "./inspector/MultiCameraPanel";
-import { useTtsAudioStore } from "../../stores/tts-store";
-import { toast } from "../../stores/notification-store";
 
-type FeatureId = "templates" | "captions" | "tts" | "filters" | "music" | "multicam" | null;
+type FeatureId = "templates" | "captions" | "filters" | "music" | "multicam" | null;
 
 interface FeatureCardProps {
   icon: React.ElementType;
@@ -108,14 +104,10 @@ const FeatureSection: React.FC<FeatureSectionProps> = ({ title, icon: Icon, chil
 
 export const AIGenTab: React.FC = () => {
   const [activeFeature, setActiveFeature] = useState<FeatureId>(null);
-  const ttsHasUnsaved = useTtsAudioStore((s) => s.generatedAudio !== null && !s.isAudioSaved);
 
   const navigateAway = useCallback((next: FeatureId) => {
-    if (activeFeature === "tts" && next !== "tts" && ttsHasUnsaved) {
-      toast.warning("Unsaved audio discarded", "Save to media or download next time to keep it.");
-    }
     setActiveFeature(next);
-  }, [activeFeature, ttsHasUnsaved]);
+  }, []);
 
   const handleFeatureClick = (id: FeatureId) => {
     navigateAway(activeFeature === id ? null : id);
@@ -127,8 +119,6 @@ export const AIGenTab: React.FC = () => {
         return <TemplatesBrowserPanel />;
       case "captions":
         return <AutoCaptionPanel />;
-      case "tts":
-        return <TextToSpeechPanel />;
       case "filters":
         return <FilterPresetsPanel />;
       case "music":
@@ -173,18 +163,6 @@ export const AIGenTab: React.FC = () => {
         </div>
 
         <FeatureSection title="Content Generation" icon={Wand2}>
-          <FeatureCard
-            icon={Mic}
-            title="Text to Speech"
-            description="Generate natural voiceovers from text"
-            iconColor="text-blue-400"
-            iconBg="bg-blue-500/20"
-            activeBorder="border-blue-500/50"
-            activeBg="bg-blue-500/10"
-            activeRing="ring-blue-500/30"
-            isActive={activeFeature === "tts"}
-            onClick={() => handleFeatureClick("tts")}
-          />
           <FeatureCard
             icon={Subtitles}
             title="Auto Captions"
@@ -258,7 +236,7 @@ export const AIGenTab: React.FC = () => {
 
         <div className="pt-2 border-t border-border">
           <Text type="supporting" color="secondary" display="block" justify="center" className="text-[9px]">
-            More AI features coming soon — image generation, auto-edit, and more
+            Ask the AI editor to generate images, cut to the beat, or build a whole sequence
           </Text>
         </div>
       </div>

@@ -43,7 +43,7 @@ const MIN_INSPECTOR_W = 280;
 const MAX_INSPECTOR_W = 560;
 
 const DEFAULT_CHAT_W = 380;
-const MIN_CHAT_W = 320;
+const MIN_CHAT_W = 240;
 const MAX_CHAT_W = 560;
 
 const MIN_STAGE_W = 380;
@@ -346,8 +346,10 @@ export const EditorInterface: React.FC = () => {
     ? {
         gridTemplateColumns: `${mediaWidth}px ${RESIZE_HANDLE}px minmax(0, 1fr) ${RESIZE_HANDLE}px ${chatWidth}px`,
         gridTemplateRows: `1fr ${RESIZE_HANDLE}px ${effectiveTimelineVh}vh`,
+        // The chat column spans all three rows so the conversation reaches the
+        // bottom edge, and the timeline stops at the chat's left edge.
         gridTemplateAreas:
-          "'media mh stage ch chat' 'th th th th th' 'timeline timeline timeline timeline timeline'",
+          "'media mh stage ch chat' 'th th th ch chat' 'timeline timeline timeline ch chat'",
       }
     : {
         gridTemplateColumns: `${mediaWidth}px ${RESIZE_HANDLE}px 1fr ${RESIZE_HANDLE}px ${inspectorWidth}px`,
