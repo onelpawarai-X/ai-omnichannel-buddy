@@ -1,40 +1,66 @@
 import js from "@eslint/js";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
-import globals from "globals";
+import tseslint from "@typescript-eslint/eslint-plugin";
+import tsparser from "@typescript-eslint/parser";
 import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
-import tseslint from "typescript-eslint";
+import globals from "globals";
 
-export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+export default [
+  js.configs.recommended,
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
+      parser: tsparser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        ...globals.node,
+        NodeJS: "readonly",
+        CanvasTextAlign: "readonly",
+        CanvasTextBaseline: "readonly",
+        ImageBitmap: "readonly",
+        OffscreenCanvas: "readonly",
+        OffscreenCanvasRenderingContext2D: "readonly",
+        React: "readonly",
+        JSX: "readonly",
+      },
     },
     plugins: {
+      "@typescript-eslint": tseslint,
       "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "server-only",
-              message:
-                "TanStack Start does not use the Next.js `server-only` package. Rename the module to `*.server.ts` or mark it with `@tanstack/react-start/server-only`.",
-            },
-          ],
-        },
+      ...tseslint.configs.recommended.rules,
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "prefer-const": "warn",
+      "no-unused-vars": "off",
+      "no-empty": "warn",
+      "no-case-declarations": "warn",
+      "react-hooks/rules-of-hooks": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: false,
     },
   },
-  eslintPluginPrettier,
-);
+  {
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "*.config.js",
+      "*.config.ts",
+      "vite.config.ts",
+    ],
+  },
+];
