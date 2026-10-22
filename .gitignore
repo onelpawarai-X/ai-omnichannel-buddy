@@ -113,3 +113,8 @@ xcuserdata/
 .tanstack/**
 .nitro
 *.local
+
+# The wasm artifacts under packages/core/src/wasm/*/build are loaded at runtime
+# via new URL("./build/x.wasm", import.meta.url), so a fresh clone must have them.
+!packages/core/src/wasm/*/build/
+!packages/core/src/wasm/*/build/*.wasm
