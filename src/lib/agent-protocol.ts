@@ -77,7 +77,7 @@ export function extractToolBlocks(raw: string): { ops: Array<Record<string, unkn
   let visibleText = raw.replace(re, (_m, body: string) => {
     try {
       const parsed = JSON.parse(body.trim()) as Record<string, unknown>;
-      if (parsed && typeof parsed.op === "string") ops.push(parsed);
+      if (parsed && typeof parsed["op"] === "string") ops.push(parsed);
     } catch {
       // malformed block — leave it out of ops, keep text clean anyway
     }
