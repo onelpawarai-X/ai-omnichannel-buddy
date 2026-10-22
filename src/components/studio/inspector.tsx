@@ -102,7 +102,7 @@ export function Inspector(): React.ReactElement {
 
   if (!clip) {
     return (
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-col gap-3.5 p-3.5">
         <p className="text-xs text-muted-foreground">
           একটি ক্লিপ সিলেক্ট করলে তার সব প্রপার্টি এখানে আসবে। এখন প্রজেক্ট সেটিংস দেখানো হচ্ছে।
         </p>

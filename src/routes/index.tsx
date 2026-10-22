@@ -138,47 +138,47 @@ function StudioPage(): React.ReactElement {
   const modelBadge = loadingModels ? "মডেল লোড হচ্ছে…" : models.length > 0 ? `${models.length} মডেল` : "ফলব্যাক মডেল তালিকা";
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-panel px-3 py-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <div className="flex h-dvh w-full flex-col gap-2.5 overflow-hidden p-2.5 text-foreground">
+      <header className="glass flex shrink-0 items-center gap-3 rounded-xl px-4 py-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_var(--color-primary)]">
           <Clapperboard className="h-4 w-4" />
         </span>
         <div className="leading-tight">
-          <p className="text-[13px] font-semibold tracking-tight">ZYRAXON Studio</p>
+          <p className="text-sm font-semibold tracking-tight">ZYRAXON Studio</p>
           <p className="text-[10px] text-muted-foreground">{modelBadge} · এজেন্ট-চালিত ক্লাউড এডিটর</p>
         </div>
 
-        <div className="mx-1 h-6 w-px bg-border" />
+        <div className="mx-1 h-7 w-px bg-white/10" />
 
-        <button type="button" className="btn-ghost h-7 w-7" title="আনডু (Ctrl+Z)" disabled={past === 0} onClick={undo}>
-          <Undo2 className="h-3.5 w-3.5" />
+        <button type="button" className="btn-ghost h-8 w-8" title="আনডু (Ctrl+Z)" disabled={past === 0} onClick={undo}>
+          <Undo2 className="h-4 w-4" />
         </button>
-        <button type="button" className="btn-ghost h-7 w-7" title="রিডু (Ctrl+Shift+Z)" disabled={future === 0} onClick={redo}>
-          <Redo2 className="h-3.5 w-3.5" />
+        <button type="button" className="btn-ghost h-8 w-8" title="রিডু (Ctrl+Shift+Z)" disabled={future === 0} onClick={redo}>
+          <Redo2 className="h-4 w-4" />
         </button>
-        <button type="button" className="btn-ghost h-7 w-7" title="সব মুছে নতুন করে শুরু" onClick={reset}>
-          <RotateCcw className="h-3.5 w-3.5" />
+        <button type="button" className="btn-ghost h-8 w-8" title="সব মুছে নতুন করে শুরু" onClick={reset}>
+          <RotateCcw className="h-4 w-4" />
         </button>
 
         <div className="flex-1" />
 
         {agentBusy && (
-          <span className="flex items-center gap-1.5 text-[11px] text-primary">
+          <span className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] text-primary">
             <Loader2 className="h-3 w-3 animate-spin" /> {agentStep ?? "এজেন্ট কাজ করছে"}
           </span>
         )}
         <span className="chip hidden md:inline-flex">{clipCount} ক্লিপ</span>
-        <button type="button" className="btn-ghost h-7 w-7" title="শর্টকাট" onClick={() => setShowHelp(true)}>
-          <Keyboard className="h-3.5 w-3.5" />
+        <button type="button" className="btn-ghost h-8 w-8" title="শর্টকাট" onClick={() => setShowHelp(true)}>
+          <Keyboard className="h-4 w-4" />
         </button>
-        <button type="button" className="btn-accent h-7 gap-1 px-2.5 text-[11px]" onClick={() => setExportOpen(true)}>
+        <button type="button" className="btn-accent h-8 gap-1.5 px-3.5 text-[11px]" onClick={() => setExportOpen(true)}>
           <Download className="h-3.5 w-3.5" /> এক্সপোর্ট
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="flex w-[264px] shrink-0 flex-col border-r border-border bg-panel">
-          <div className="flex shrink-0 gap-1 border-b border-border p-1.5">
+      <div className="flex min-h-0 flex-1 gap-2.5">
+        <aside className="glass flex w-[280px] shrink-0 flex-col overflow-hidden rounded-xl">
+          <div className="flex shrink-0 gap-1 p-2">
             {(
               [
                 { id: "media" as LeftTab, label: "মিডিয়া", icon: <FolderOpen className="h-3.5 w-3.5" /> },
@@ -189,9 +189,7 @@ function StudioPage(): React.ReactElement {
                 key={tab.id}
                 type="button"
                 onClick={() => setLeftTab(tab.id)}
-                className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                  leftTab === tab.id ? "bg-panel-3 text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`tab-pill ${leftTab === tab.id ? "tab-pill-active" : ""}`}
               >
                 {tab.icon}
                 {tab.label}
@@ -201,15 +199,15 @@ function StudioPage(): React.ReactElement {
           <div className="flex min-h-0 flex-1 flex-col">{leftTab === "media" ? <MediaPanel /> : <LibraryPanel />}</div>
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-w-0 flex-1 flex-col gap-2.5">
           <Stage />
-          <div className="h-[40%] min-h-[210px] shrink-0">
+          <div className="h-[40%] min-h-[220px] shrink-0">
             <Timeline />
           </div>
         </main>
 
-        <aside className="flex w-[344px] shrink-0 flex-col border-l border-border bg-panel">
-          <div className="flex shrink-0 gap-1 border-b border-border p-1.5">
+        <aside className="glass flex w-[360px] shrink-0 flex-col overflow-hidden rounded-xl">
+          <div className="flex shrink-0 gap-1 p-2">
             {(
               [
                 { id: "chat" as RightTab, label: "এজেন্ট", icon: <Bot className="h-3.5 w-3.5" /> },
@@ -220,9 +218,7 @@ function StudioPage(): React.ReactElement {
                 key={tab.id}
                 type="button"
                 onClick={() => setRightTab(tab.id)}
-                className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                  rightTab === tab.id ? "bg-panel-3 text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`tab-pill ${rightTab === tab.id ? "tab-pill-active" : ""}`}
               >
                 {tab.icon}
                 {tab.label}
@@ -239,12 +235,12 @@ function StudioPage(): React.ReactElement {
         <button
           type="button"
           onClick={dismissToast}
-          className={`fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border px-3 py-1.5 text-[11px] shadow-lg ${
+          className={`glass-strong fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-[11px] ${
             toast.kind === "error"
-              ? "border-destructive/60 bg-destructive/15 text-destructive"
+              ? "text-destructive"
               : toast.kind === "success"
-                ? "border-primary/60 bg-primary/15 text-foreground"
-                : "border-border bg-panel-2 text-foreground"
+                ? "text-primary"
+                : "text-foreground"
           }`}
         >
           {toast.text}
@@ -254,13 +250,13 @@ function StudioPage(): React.ReactElement {
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
 
       {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowHelp(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
           <div
-            className="w-full max-w-md space-y-2 rounded-xl border border-border bg-panel p-4"
+            className="glass-strong w-full max-w-md space-y-3 rounded-2xl p-6"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-sm font-semibold">শর্টকাট ও ব্যবহার</h2>
-            <ul className="space-y-1 text-[11px] text-muted-foreground">
+            <h2 className="text-base font-semibold">শর্টকাট ও ব্যবহার</h2>
+            <ul className="space-y-2 text-xs leading-relaxed text-muted-foreground">
               <li>Space — প্লে/পজ</li>
               <li>← / → — এক ফ্রেম (Shift চাপলে ১ সেকেন্ড)</li>
               <li>Ctrl/Cmd + Z — আনডু · Ctrl/Cmd + Shift + Z — রিডু</li>
@@ -269,10 +265,10 @@ function StudioPage(): React.ReactElement {
               <li>টাইমলাইনে ফাইল ড্র্যাগ করলে সরাসরি ক্লিপ বসে</li>
               <li>চ্যাটে ফাইল ড্র্যাগ বা মাইক চেপে বললে প্রম্পটে লেখা হয়</li>
             </ul>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               এজেন্টকে শুধু ভিডিও দিন — সিন-চেঞ্জ, বিট আর টাইমিং বুঝে সে নিজেই কাট, ইফেক্ট, ক্যাপশন আর সাউন্ড বানায়।
             </p>
-            <button type="button" className="btn-accent h-8 w-full text-xs" onClick={() => setShowHelp(false)}>
+            <button type="button" className="btn-accent h-9 w-full text-xs" onClick={() => setShowHelp(false)}>
               বুঝেছি
             </button>
           </div>

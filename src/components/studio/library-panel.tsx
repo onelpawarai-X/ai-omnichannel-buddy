@@ -14,6 +14,26 @@ import type { AssetResult } from "@/lib/engine/assets";
 
 type Tab = "effects" | "stock" | "motion" | "youtube";
 
+/** Mixkit shelves worth one tap: the effect-heavy end of the catalogue. */
+const STOCK_SHELVES: Array<{ slug: string; label: string }> = [
+  { slug: "abstract", label: "Abstract" },
+  { slug: "background", label: "Backgrounds" },
+  { slug: "double-exposure", label: "Double exposure" },
+  { slug: "fire", label: "Fire" },
+  { slug: "smoke", label: "Smoke" },
+  { slug: "light", label: "Light" },
+  { slug: "water", label: "Water" },
+  { slug: "sky", label: "Sky" },
+  { slug: "space", label: "Space" },
+  { slug: "snow", label: "Snow" },
+  { slug: "rain", label: "Rain" },
+  { slug: "countdown", label: "Countdown" },
+  { slug: "green-screen", label: "Green screen" },
+  { slug: "horror", label: "Horror" },
+  { slug: "party", label: "Party" },
+  { slug: "city", label: "City" },
+];
+
 const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
   { id: "effects", label: "ইফেক্ট", icon: <Wand2 className="h-3.5 w-3.5" /> },
   { id: "stock", label: "স্টক", icon: <ImageIcon className="h-3.5 w-3.5" /> },
@@ -38,14 +58,27 @@ export function LibraryPanel(): React.ReactElement {
   const importYouTube = useEditor((s) => s.importYouTube);
   const animations = useEditor((s) => s.animations);
   const loadAnimation = useEditor((s) => s.loadAnimation);
+  const searchLottie = useEditor((s) => s.searchLottie);
+  const loadLottieResult = useEditor((s) => s.loadLottieResult);
+  const lottieResults = useEditor((s) => s.lottieResults);
+  const lottieLoading = useEditor((s) => s.lottieLoading);
+  const browseYouTube = useEditor((s) => s.browseYouTube);
+  const stockResults = useEditor((s) => s.stockResults);
+  const stockLoading = useEditor((s) => s.stockLoading);
+  const loadStockCategory = useEditor((s) => s.loadStockCategory);
+  const importStockVideo = useEditor((s) => s.importStockVideo);
 
   const [category, setCategory] = useState<EffectCategory | "all">("all");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [lottieQuery, setLottieQuery] = useState("");
+  const [browseQuery, setBrowseQuery] = useState("");
   const [youtubeMode, setYoutubeMode] = useState<"video" | "audio">("video");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (tab === "stock" && assetResults.length === 0) void runAssetSearch("cinematic", "all");
+    if (tab === "stock" && stockResults.length === 0) void loadStockCategory("abstract");
+    // The YouTube shelf is populated on open so the panel is never blank.
+    if (tab === "youtube" && assetResults.length === 0) void browseYouTube("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -59,18 +92,8 @@ export function LibraryPanel(): React.ReactElement {
   };
 
   const addAnimationToTimeline = (animationId: string): void => {
-    dispatch([
-      {
-        op: "add_clip",
-        clip: {
-          kind: "effect",
-          animationId,
-          label: animations.find((a) => a.id === animationId)?.name ?? "animation",
-          duration: animations.find((a) => a.id === animationId)?.duration ?? 3,
-          blendMode: "screen",
-        },
-      },
-    ]);
+    const entry = animations.find((a) => a.id === animationId);
+    void dispatch([{ op: "add_animation", animationId, ...(entry ? { duration: entry.duration } : {}) }]);
   };
 
   const loadAnimationUrl = async (): Promise<void> => {
@@ -105,7 +128,7 @@ export function LibraryPanel(): React.ReactElement {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+      <div className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3 py-2">
         {TABS.map((entry) => (
           <button
             key={entry.id}
@@ -121,7 +144,7 @@ export function LibraryPanel(): React.ReactElement {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
         {tab === "effects" && (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1">
@@ -165,6 +188,43 @@ export function LibraryPanel(): React.ReactElement {
 
         {tab === "stock" && (
           <div className="space-y-2">
+            <div className="flex flex-wrap gap-1">
+              {STOCK_SHELVES.map((shelf) => (
+                <button
+                  key={shelf.slug}
+                  type="button"
+                  onClick={() => void loadStockCategory(shelf.slug)}
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-panel-2 text-muted-foreground hover:text-foreground"
+                >
+                  {shelf.label}
+                </button>
+              ))}
+            </div>
+            {stockLoading && (
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> স্টক লাইব্রেরি থেকে আনা হচ্ছে…
+              </p>
+            )}
+            {!stockLoading && stockResults.length > 0 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {stockResults.map((video) => (
+                  <button
+                    key={video.id}
+                    type="button"
+                    onClick={() => void importStockVideo(video)}
+                    className="group flex flex-col overflow-hidden rounded-md border border-border bg-panel-2 text-left transition-colors hover:border-primary"
+                    title={video.title}
+                  >
+                    <div className="relative h-16 w-full overflow-hidden bg-panel-3">
+                      <img src={video.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <span className="absolute bottom-0.5 left-0.5 rounded-sm bg-black/60 px-1 text-[9px] text-white">stock</span>
+                    </div>
+                    <span className="truncate px-1.5 py-1 text-[10px] text-foreground">{video.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="pt-1 text-[10px] text-muted-foreground">Mixkit — ফ্রি স্টক ও ইফেক্ট, সরাসরি টাইমলাইনে বসে। আরও কনটেন্টের জন্য নিচে খুঁজুন।</p>
             <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel-2 p-1">
               <Search className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <input
@@ -215,6 +275,46 @@ export function LibraryPanel(): React.ReactElement {
 
         {tab === "motion" && (
           <div className="space-y-2">
+            <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel-2 p-1">
+              <Search className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                value={lottieQuery}
+                onChange={(event) => setLottieQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void searchLottie(lottieQuery);
+                }}
+                placeholder="LottieFiles-এ খুঁজুন — কোটি কোটি অ্যানিমেশন"
+                className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <button type="button" className="btn-ghost h-6 px-2 text-[11px]" onClick={() => void searchLottie(lottieQuery)}>
+                খুঁজুন
+              </button>
+            </div>
+            {lottieLoading && (
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> LottieFiles থেকে আনা হচ্ছে…
+              </p>
+            )}
+            {lottieResults.length > 0 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {lottieResults.map((hit) => (
+                  <button
+                    key={hit.url}
+                    type="button"
+                    onClick={() => void loadLottieResult(hit.title, hit.url)}
+                    className="group flex flex-col overflow-hidden rounded-md border border-border bg-panel-2 text-left transition-colors hover:border-primary"
+                    title={hit.title}
+                  >
+                    <div className="h-16 w-full overflow-hidden bg-panel-3">
+                      {hit.thumb ? (
+                        <img src={hit.thumb} alt="" loading="lazy" className="h-full w-full object-contain" />
+                      ) : null}
+                    </div>
+                    <span className="truncate px-1.5 py-1 text-[10px] text-foreground">{hit.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex gap-1.5">
               <button type="button" className="btn-ghost h-7 flex-1 border border-border text-[11px]" onClick={() => void loadAnimationUrl()} disabled={busy}>
                 {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Lottie লিংক
@@ -243,8 +343,35 @@ export function LibraryPanel(): React.ReactElement {
 
         {tab === "youtube" && (
           <div className="space-y-2">
+            <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel-2 p-1">
+              <Search className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                value={browseQuery}
+                onChange={(event) => setBrowseQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void browseYouTube(browseQuery);
+                }}
+                placeholder="ইউটিউবে খুঁজুন — খালি রাখলে ট্রেন্ডিং"
+                className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <button type="button" className="btn-ghost h-6 px-2 text-[11px]" onClick={() => void browseYouTube(browseQuery)}>
+                খুঁজুন
+              </button>
+            </div>
+            {assetLoading && (
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> ইউটিউব থেকে আনা হচ্ছে…
+              </p>
+            )}
+            {!assetLoading && assetResults.length > 0 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {assetResults.map((asset) => (
+                  <AssetCard key={`${asset.source}-${asset.url}`} asset={asset} onAdd={() => void importAsset(asset)} />
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
-              ইউটিউব লিংক দিন — ভিডিও বা অডিও স্ট্রিম সরাসরি টাইমলাইনে বসবে। ডাউনলোড সার্ভার-সাইড প্রক্সির মাধ্যমে হয়।
+              উপরের যেকোনো ভিডিও ক্লিক করলে সরাসরি টাইমলাইনে বসবে। অথবা নিচে লিংক দিয়ে ভিডিও বা শুধু অডিও আনুন।
             </p>
             <input
               value={youtubeUrl}

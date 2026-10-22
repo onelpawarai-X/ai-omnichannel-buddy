@@ -41,6 +41,10 @@ export type AgentContext = {
   importUrl: (url: string, kind: "video" | "audio" | "image", name?: string) => Promise<{ mediaId: string; name: string; duration: number }>;
   /** fetch a Lottie JSON and register it, returning the animation id */
   loadAnimation: (url: string, name?: string) => Promise<string>;
+  /** search the live LottieFiles catalogue for animations */
+  searchLottie: (query: string) => Promise<unknown[]>;
+  /** browse the Mixkit stock shelves (effects, backgrounds, overlays) */
+  stockCategory: (category?: string) => Promise<unknown[]>;
 };
 
 const str = (args: Record<string, unknown>, key: string, fallback = ""): string => {
@@ -672,6 +676,48 @@ export const TOOLS: AgentTool[] = [
     },
   },
   {
+    name: "search_stock",
+    description:
+      "Browse the Mixkit stock library for real footage overlays: fire, smoke, light leaks, particles, rain, snow, clouds, water, countdowns, green screen and backgrounds. Use this - not search_lottie - when the user asks for an effect, overlay or background that should look photographic: fire, smoke, sparks, dust, lens flare, light leak, ink, water splash. Pass a category to read that shelf. Returns titles plus a 720p url, a 1080p url and a poster frame; pass the url to import_media.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description:
+            "Shelf to read. One of: abstract, background, double-exposure, fire, smoke, light, water, sky, space, snow, rain, countdown, green-screen, horror, party, city, nature, food, people.",
+        },
+      },
+    },
+    async run(args, ctx) {
+      const category = str(args, "category", "abstract");
+      const results = await ctx.stockCategory(category);
+      if (results.length === 0) return { ok: true, data: { results: [], note: "no stock videos on that shelf" } };
+      return { ok: true, data: results };
+    },
+  },
+  {
+    name: "search_lottie",
+    description:
+      "Search the live LottieFiles catalogue for vector animations - millions of entries, far beyond the local library. Use this for animated graphics: icons, arrows, loaders, confetti, lower thirds, animated titles, illustrated characters, UI motion. For photographic overlays such as fire or smoke use search_stock instead. Returns titles, direct Lottie JSON urls and poster frames. Pass the url straight to add_animation.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to look for, for example 'confetti', 'glitch text', 'arrow pointing down'" },
+        limit: { type: "number" },
+      },
+      required: ["query"],
+    },
+    async run(args, ctx) {
+      const query = str(args, "query");
+      if (!query) return { ok: false, error: "query is required" };
+      const results = await ctx.searchLottie(query);
+      const limit = Math.max(1, Math.min(40, numOr(args, "limit", 20)));
+      if (results.length === 0) return { ok: true, data: { results: [], note: "no animations found for that query" } };
+      return { ok: true, data: results.slice(0, limit) };
+    },
+  },
+  {
     name: "add_animation",
     description:
       "Place a Lottie animation as an overlay on top of the video. Pass animationId for a loaded animation, or url to fetch a Lottie JSON directly (for example from lottiefiles). The overlay is composited above the picture and never moves the clip underneath.",
@@ -729,6 +775,23 @@ export const TOOLS: AgentTool[] = [
       const clipId = clipArg || undefined;
       const result = await ctx.dispatch([{ op: "beat_cut", mediaId, ...(targetMediaId ? { targetMediaId } : {}), ...(clipId ? { clipId } : {}) }]);
       return { ok: true, data: { notes: result.notes } };
+    },
+  },
+  {
+    name: "ask_user",
+    description:
+      "Ask the user one question and stop. Use it only when you cannot continue without a decision or a piece of information only they can give - a YouTube link that will not resolve, missing footage, or two genuinely different directions for the edit. Ask one clear question, call nothing else in the same turn, and wait for the reply.",
+    parameters: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The single question, in the user's language" },
+        options: { type: "array", items: { type: "string" }, description: "Optional short choices the user can pick from" },
+      },
+      required: ["question"],
+    },
+    run(args) {
+      const options = Array.isArray(args["options"]) ? (args["options"] as unknown[]).map((o) => String(o)) : [];
+      return { ok: true, data: { asked: str(args, "question", ""), options } };
     },
   },
   {
