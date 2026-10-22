@@ -84,3 +84,21 @@ media worker exposes `ffmpeg`, `ffprobe`, `ImageMagick` and `python3` through
 from `/api/renders/<file>`.
 <!-- ZYRAXON:ENGINE:END -->
 
+
+<!-- ZYRAXON:LAYOUT:BEGIN -->
+## Repository layout — where the deployable app lives
+
+The **repository root is the Lovable project**. Lovable builds from the root,
+so `.lovable/`, `src/`, `public/`, `vite.config.ts`, `tsconfig.json` and the
+TanStack Start `package.json` must stay at the root. Do not replace them.
+
+The newer `openreel-video` monorepo lives in `apps/` and `packages/` and is
+untouched by the root app: the root app has no `@openreel/*` imports and builds
+on its own with `npx vite build`.
+
+If the monorepo ever needs its own root manifest back, it is in git history:
+
+```bash
+git show 7edf59b:package.json > package.json   # monorepo "openreel" manifest
+```
+<!-- ZYRAXON:LAYOUT:END -->
