@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAssetsRouteImport } from './routes/api/assets'
+import { Route as ApiCommandRouteImport } from './routes/api/command'
+import { Route as ApiMediaRouteImport } from './routes/api/media'
+import { Route as ApiYoutubeRouteImport } from './routes/api/youtube'
+import { Route as ApiRendersNameRouteImport } from './routes/api/renders.$name'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssetsRoute = ApiAssetsRouteImport.update({
+  id: '/api/assets',
+  path: '/api/assets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommandRoute = ApiCommandRouteImport.update({
+  id: '/api/command',
+  path: '/api/command',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaRoute = ApiMediaRouteImport.update({
+  id: '/api/media',
+  path: '/api/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiYoutubeRoute = ApiYoutubeRouteImport.update({
+  id: '/api/youtube',
+  path: '/api/youtube',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRendersNameRoute = ApiRendersNameRouteImport.update({
+  id: '/api/renders/$name',
+  path: '/api/renders/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/assets': typeof ApiAssetsRoute
+  '/api/command': typeof ApiCommandRoute
+  '/api/media': typeof ApiMediaRoute
+  '/api/youtube': typeof ApiYoutubeRoute
+  '/api/renders/$name': typeof ApiRendersNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/assets': typeof ApiAssetsRoute
+  '/api/command': typeof ApiCommandRoute
+  '/api/media': typeof ApiMediaRoute
+  '/api/youtube': typeof ApiYoutubeRoute
+  '/api/renders/$name': typeof ApiRendersNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/assets': typeof ApiAssetsRoute
+  '/api/command': typeof ApiCommandRoute
+  '/api/media': typeof ApiMediaRoute
+  '/api/youtube': typeof ApiYoutubeRoute
+  '/api/renders/$name': typeof ApiRendersNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/api/assets'
+    | '/api/command'
+    | '/api/media'
+    | '/api/youtube'
+    | '/api/renders/$name'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/api/assets'
+    | '/api/command'
+    | '/api/media'
+    | '/api/youtube'
+    | '/api/renders/$name'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/assets'
+    | '/api/command'
+    | '/api/media'
+    | '/api/youtube'
+    | '/api/renders/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAssetsRoute: typeof ApiAssetsRoute
+  ApiCommandRoute: typeof ApiCommandRoute
+  ApiMediaRoute: typeof ApiMediaRoute
+  ApiYoutubeRoute: typeof ApiYoutubeRoute
+  ApiRendersNameRoute: typeof ApiRendersNameRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assets': {
+      id: '/api/assets'
+      path: '/api/assets'
+      fullPath: '/api/assets'
+      preLoaderRoute: typeof ApiAssetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/command': {
+      id: '/api/command'
+      path: '/api/command'
+      fullPath: '/api/command'
+      preLoaderRoute: typeof ApiCommandRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media': {
+      id: '/api/media'
+      path: '/api/media'
+      fullPath: '/api/media'
+      preLoaderRoute: typeof ApiMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/youtube': {
+      id: '/api/youtube'
+      path: '/api/youtube'
+      fullPath: '/api/youtube'
+      preLoaderRoute: typeof ApiYoutubeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/renders/$name': {
+      id: '/api/renders/$name'
+      path: '/api/renders/$name'
+      fullPath: '/api/renders/$name'
+      preLoaderRoute: typeof ApiRendersNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAssetsRoute: ApiAssetsRoute,
+  ApiCommandRoute: ApiCommandRoute,
+  ApiMediaRoute: ApiMediaRoute,
+  ApiYoutubeRoute: ApiYoutubeRoute,
+  ApiRendersNameRoute: ApiRendersNameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
