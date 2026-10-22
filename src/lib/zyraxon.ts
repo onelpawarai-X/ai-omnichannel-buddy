@@ -51,14 +51,25 @@ export async function fetchZyraxonModels(): Promise<ZyraxonModel[]> {
     const res = await fetch(`${ZYRAXON_BASE}/models`);
     if (!res.ok) throw new Error(String(res.status));
     const json = (await res.json()) as { data?: Array<Record<string, unknown>> };
-    const models = (json.data ?? []).map((m) => ({
-      id: String(m.id),
-      name: String(m.display_name ?? m.name ?? m.id),
-      description: String(m.description ?? ""),
-      input_modalities: Array.isArray(m.input_modalities) ? (m.input_modalities as string[]) : ["text"],
-      context_window: Number(m.context_window ?? 0),
-      max_output_tokens: Number(m.max_output_tokens ?? 0),
-    }));
+    const items = json.data ?? [];
+    const models: ZyraxonModel[] = items.map((m) => {
+      const id = String(m["id"] ?? "");
+      const name = String(m["display_name"] ?? m["name"] ?? id);
+      const desc = String(m["description"] ?? "");
+      const modalities = Array.isArray(m["input_modalities"])
+        ? (m["input_modalities"] as string[])
+        : ["text"];
+      const cw = Number(m["context_window"] ?? 0);
+      const mot = Number(m["max_output_tokens"] ?? 0);
+      return {
+        id,
+        name,
+        description: desc,
+        input_modalities: modalities,
+        context_window: cw,
+        max_output_tokens: mot,
+      };
+    });
     return models.length ? models : FALLBACK_MODELS;
   } catch {
     return FALLBACK_MODELS;
@@ -132,8 +143,11 @@ export async function ttsToBlob(
   opts?: { voice?: string; locale?: string },
 ): Promise<Blob> {
   const body: Record<string, string> = { text: text.slice(0, 5000) };
-  if (opts?.voice) body.voice = opts.voice;
-  else body.locale = opts?.locale ?? "bn";
+  if (opts && typeof opts["voice"] === "string") {
+    body["voice"] = opts["voice"];
+  } else {
+    body["locale"] = (opts && typeof opts["locale"] === "string") ? opts["locale"] : "bn";
+  }
   const res = await fetch(ZYRAXON_TTS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
