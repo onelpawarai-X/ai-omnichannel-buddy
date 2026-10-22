@@ -88,17 +88,31 @@ from `/api/renders/<file>`.
 <!-- ZYRAXON:LAYOUT:BEGIN -->
 ## Repository layout — where the deployable app lives
 
-The **repository root is the Lovable project**. Lovable builds from the root,
-so `.lovable/`, `src/`, `public/`, `vite.config.ts`, `tsconfig.json` and the
-TanStack Start `package.json` must stay at the root. Do not replace them.
+The **repository root is the OpenReel editor** (React + Vite SPA). Lovable
+builds from the root, so `index.html`, `src/`, `public/`, `vite.config.ts`,
+`tailwind.config.js`, `postcss.config.js`, `tsconfig.json` and `package.json`
+must stay at the root.
 
-The newer `openreel-video` monorepo lives in `apps/` and `packages/` and is
-untouched by the root app: the root app has no `@openreel/*` imports and builds
-on its own with `npx vite build`.
-
-If the monorepo ever needs its own root manifest back, it is in git history:
+- `packages/` holds the `@openreel/*` libraries the root app imports.
+  `vite.config.ts` aliases them straight to `packages/*/src`, so the root
+  manifest declares **no** `@openreel/*` dependency and **no** `workspaces`
+  field. That keeps the install graph third-party only and lets npm, pnpm and
+  bun all install it. Do not add `workspace:*` — npm rejects it.
+- `apps/` holds the sibling targets: `desktop`, `image`, `studio`, `cloud`.
+  `apps/desktop` resolves the web build at `apps/web/dist`; since the web app
+  now builds from the root, point it at `dist/` if the desktop shell is used.
+- Build and check from the root with npm, the package manager Lovable uses:
 
 ```bash
-git show 7edf59b:package.json > package.json   # monorepo "openreel" manifest
+npm install
+npx tsc --noEmit
+npm run build      # -> dist/, SPA fallback via public/_redirects
+```
+
+The older ZYRAXON Studio app that used to live at the root, and the copy of the
+web app that used to live in `apps/web`, are both in git history:
+
+```bash
+git show 7edf59b:package.json      # the monorepo "openreel" manifest
 ```
 <!-- ZYRAXON:LAYOUT:END -->

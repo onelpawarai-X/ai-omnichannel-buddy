@@ -1,10 +1,54 @@
 import "@testing-library/jest-dom/vitest";
 
-Object.defineProperty(window, "scrollTo", {
+class LocalStorageMock {
+  private store = new Map<string, string>();
+
+  get length(): number {
+    return this.store.size;
+  }
+
+  clear(): void {
+    this.store.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.store.has(key) ? (this.store.get(key) as string) : null;
+  }
+
+  key(index: number): string | null {
+    return Array.from(this.store.keys())[index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.store.set(key, String(value));
+  }
+}
+
+Object.defineProperty(window, "localStorage", {
   writable: true,
-  value: () => {},
+  value: new LocalStorageMock(),
 });
 
+Object.defineProperty(window, "sessionStorage", {
+  writable: true,
+  value: new LocalStorageMock(),
+});
+
+Object.defineProperty(globalThis, "localStorage", {
+  writable: true,
+  value: window.localStorage,
+});
+
+Object.defineProperty(globalThis, "sessionStorage", {
+  writable: true,
+  value: window.sessionStorage,
+});
+
+// Mock matchMedia for tests
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
@@ -15,95 +59,306 @@ Object.defineProperty(window, "matchMedia", {
     removeListener: () => {},
     addEventListener: () => {},
     removeEventListener: () => {},
-    dispatchEvent: () => {},
+    dispatchEvent: () => false,
   }),
 });
 
-// jsdom has no canvas. lottie-web and the spectrogram renderer both need a 2D
-// context, so hand back a recording stub instead of null.
-type Context2D = {
-  canvas: HTMLCanvasElement;
-  calls: string[];
-  imageData: ImageData | null;
-};
-
-const contexts = new WeakMap<HTMLCanvasElement, Context2D>();
-
-function createContext(canvas: HTMLCanvasElement): Context2D {
-  const state: Context2D = { canvas, calls: [], imageData: null };
-  const record = (name: string) => (...args: unknown[]): void => {
-    state.calls.push(name);
-    void args;
-  };
-  const target: Record<string, unknown> = {
-    measureText: () => ({ width: 10 }),
-    createImageData: (w: number, h: number) => ({
-      width: w,
-      height: h,
-      data: new Uint8ClampedArray(w * h * 4),
-    }),
-    getImageData: (x: number, y: number, w: number, h: number) => ({
-      width: w,
-      height: h,
-      data: new Uint8ClampedArray(w * h * 4),
-    }),
-    putImageData: (data: ImageData) => {
-      state.imageData = data;
-    },
-    getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
-    save: record("save"),
-    restore: record("restore"),
-    beginPath: record("beginPath"),
-    closePath: record("closePath"),
-    moveTo: record("moveTo"),
-    lineTo: record("lineTo"),
-    bezierCurveTo: record("bezierCurveTo"),
-    quadraticCurveTo: record("quadraticCurveTo"),
-    arc: record("arc"),
-    rect: record("rect"),
-    fill: record("fill"),
-    stroke: record("stroke"),
-    clip: record("clip"),
-    fillRect: record("fillRect"),
-    strokeRect: record("strokeRect"),
-    clearRect: record("clearRect"),
-    fillText: record("fillText"),
-    strokeText: record("strokeText"),
-    translate: record("translate"),
-    rotate: record("rotate"),
-    scale: record("scale"),
-    transform: record("transform"),
-    setTransform: record("setTransform"),
-    drawImage: record("drawImage"),
-    createLinearGradient: () => ({ addColorStop: () => undefined }),
-    createRadialGradient: () => ({ addColorStop: () => undefined }),
-    createPattern: () => null,
-    setLineDash: record("setLineDash"),
-  };
-  const ctx = target as unknown as Context2D;
-  Object.defineProperty(ctx, "canvas", { value: canvas, enumerable: true });
-  return ctx;
+// Mock ResizeObserver for tests
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
 }
 
-Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
-  configurable: true,
-  value(this: HTMLCanvasElement, kind: string) {
-    if (kind !== "2d") return null;
-    const existing = contexts.get(this);
-    if (existing) return existing as unknown as CanvasRenderingContext2D;
-    const created = createContext(this);
-    contexts.set(this, created);
-    return created as unknown as CanvasRenderingContext2D;
-  },
+Object.defineProperty(window, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock,
 });
 
-Object.defineProperty(HTMLCanvasElement.prototype, "toDataURL", {
-  configurable: true,
-  value(this: HTMLCanvasElement) {
-    // Encode the real canvas size so a test can assert what was drawn, and keep
-    // the payload long enough to look like a PNG for size-sensitive checks.
-    const header = `${this.width}x${this.height}`;
-    const filler = "A".repeat(Math.min(4096, Math.max(0, this.width * this.height)));
-    return `data:image/png;base64,${Buffer.from(`${header}|${filler}`).toString("base64")}`;
-  },
+// Also set it globally for jsdom
+global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+
+// Mock HTMLCanvasElement.getContext for tests
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(HTMLCanvasElement.prototype as any).getContext = function (contextId: string) {
+  if (contextId === "bitmaprenderer") {
+    return {
+      transferFromImageBitmap: () => {},
+    };
+  }
+  return {
+    fillRect: () => {},
+    clearRect: () => {},
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    putImageData: () => {},
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    setTransform: () => {},
+    drawImage: () => {},
+    save: () => {},
+    restore: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    closePath: () => {},
+    stroke: () => {},
+    fill: () => {},
+    translate: () => {},
+    scale: () => {},
+    rotate: () => {},
+    arc: () => {},
+    measureText: () => ({ width: 0 }),
+    transform: () => {},
+    rect: () => {},
+    clip: () => {},
+    fillText: () => {},
+    strokeText: () => {},
+    createLinearGradient: () => ({
+      addColorStop: () => {},
+    }),
+    createRadialGradient: () => ({
+      addColorStop: () => {},
+    }),
+    createPattern: () => ({}),
+    canvas: this,
+  } as unknown as CanvasRenderingContext2D;
+};
+
+// Mock IndexedDB for tests
+const indexedDBMock = {
+  open: () => ({
+    result: {
+      createObjectStore: () => ({}),
+      transaction: () => ({
+        objectStore: () => ({
+          put: () => ({}),
+          get: () => ({}),
+          delete: () => ({}),
+        }),
+      }),
+    },
+    onerror: null,
+    onsuccess: null,
+    onupgradeneeded: null,
+  }),
+  deleteDatabase: () => ({}),
+};
+
+Object.defineProperty(window, "indexedDB", {
+  writable: true,
+  value: indexedDBMock,
+});
+
+// Mock AudioContext for tests
+class AudioContextMock {
+  destination = {
+    channelCount: 2,
+    channelCountMode: "max",
+    channelInterpretation: "speakers",
+  };
+  sampleRate = 48000;
+  currentTime = 0;
+  state = "running";
+
+  createGain() {
+    return {
+      gain: {
+        value: 1,
+        setValueAtTime: () => {},
+        linearRampToValueAtTime: () => {},
+      },
+      connect: () => {},
+      disconnect: () => {},
+    };
+  }
+
+  createBufferSource() {
+    return {
+      buffer: null,
+      connect: () => {},
+      disconnect: () => {},
+      start: () => {},
+      stop: () => {},
+      onended: null,
+    };
+  }
+
+  createAnalyser() {
+    return {
+      fftSize: 2048,
+      frequencyBinCount: 1024,
+      minDecibels: -100,
+      maxDecibels: -30,
+      smoothingTimeConstant: 0.8,
+      connect: () => {},
+      disconnect: () => {},
+      getByteFrequencyData: () => {},
+      getByteTimeDomainData: () => {},
+      getFloatFrequencyData: () => {},
+      getFloatTimeDomainData: () => {},
+    };
+  }
+
+  createBiquadFilter() {
+    return {
+      type: "lowpass",
+      frequency: { value: 350, setValueAtTime: () => {} },
+      Q: { value: 1, setValueAtTime: () => {} },
+      gain: { value: 0, setValueAtTime: () => {} },
+      connect: () => {},
+      disconnect: () => {},
+    };
+  }
+
+  createDynamicsCompressor() {
+    return {
+      threshold: { value: -24, setValueAtTime: () => {} },
+      knee: { value: 30, setValueAtTime: () => {} },
+      ratio: { value: 12, setValueAtTime: () => {} },
+      attack: { value: 0.003, setValueAtTime: () => {} },
+      release: { value: 0.25, setValueAtTime: () => {} },
+      connect: () => {},
+      disconnect: () => {},
+    };
+  }
+
+  createStereoPanner() {
+    return {
+      pan: {
+        value: 0,
+        setValueAtTime: () => {},
+        linearRampToValueAtTime: () => {},
+      },
+      connect: () => {},
+      disconnect: () => {},
+    };
+  }
+
+  createBuffer(channels: number, length: number, sampleRate: number) {
+    return {
+      length,
+      duration: length / sampleRate,
+      sampleRate,
+      numberOfChannels: channels,
+      getChannelData: () => new Float32Array(length),
+      copyFromChannel: () => {},
+      copyToChannel: () => {},
+    };
+  }
+
+  decodeAudioData(_audioData: ArrayBuffer) {
+    return Promise.resolve(this.createBuffer(2, 48000, 48000));
+  }
+
+  close() {
+    return Promise.resolve();
+  }
+
+  resume() {
+    return Promise.resolve();
+  }
+
+  suspend() {
+    return Promise.resolve();
+  }
+}
+
+Object.defineProperty(window, "AudioContext", {
+  writable: true,
+  value: AudioContextMock,
+});
+
+Object.defineProperty(window, "webkitAudioContext", {
+  writable: true,
+  value: AudioContextMock,
+});
+
+class OfflineAudioContextMock extends AudioContextMock {
+  constructor(_numberOfChannels: number, _length: number, _sampleRate: number) {
+    super();
+  }
+
+  startRendering() {
+    return Promise.resolve(this.createBuffer(2, 48000, 48000));
+  }
+}
+
+Object.defineProperty(window, "OfflineAudioContext", {
+  writable: true,
+  value: OfflineAudioContextMock,
+});
+
+Object.defineProperty(globalThis, "OfflineAudioContext", {
+  writable: true,
+  value: OfflineAudioContextMock,
+});
+
+// Mock OffscreenCanvas for tests
+class OffscreenCanvasMock {
+  width: number;
+  height: number;
+
+  constructor(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+  }
+
+  getContext(contextId: string) {
+    if (contextId === "2d") {
+      return {
+        fillRect: () => {},
+        clearRect: () => {},
+        getImageData: (
+          _x: number,
+          _y: number,
+          width: number,
+          height: number,
+        ) => ({
+          data: new Uint8ClampedArray(width * height * 4),
+          width,
+          height,
+        }),
+        putImageData: () => {},
+        createImageData: (width: number, height: number) => ({
+          data: new Uint8ClampedArray(width * height * 4),
+          width,
+          height,
+        }),
+        setTransform: () => {},
+        drawImage: () => {},
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        closePath: () => {},
+        stroke: () => {},
+        fill: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        measureText: () => ({ width: 0 }),
+        transform: () => {},
+        rect: () => {},
+        clip: () => {},
+        fillText: () => {},
+        strokeText: () => {},
+        canvas: this,
+      };
+    }
+    return null;
+  }
+
+  convertToBlob() {
+    return Promise.resolve(new Blob());
+  }
+
+  transferToImageBitmap() {
+    return {} as ImageBitmap;
+  }
+}
+
+Object.defineProperty(globalThis, "OffscreenCanvas", {
+  writable: true,
+  value: OffscreenCanvasMock,
 });
