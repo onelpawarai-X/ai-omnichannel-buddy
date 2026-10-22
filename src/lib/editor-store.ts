@@ -190,8 +190,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       url,
       duration: 0,
       source,
-      blob,
     };
+    if (blob) item.blob = blob;
+
     set((s) => ({ media: [...s.media, item] }));
     try {
       const probe = kind === "video" ? await probeVideo(url) : kind === "audio" ? await probeAudio(url) : await probeImage(url);
@@ -498,14 +499,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
       case "add_text": {
         const textProps: Partial<TextProps> & { start?: number; duration?: number } = {};
-        if (str("content") !== undefined) textProps.content = str("content");
-        if (num("start") !== undefined) textProps.start = num("start");
-        if (num("duration") !== undefined) textProps.duration = num("duration");
-        if (num("x") !== undefined) textProps.x = num("x");
-        if (num("y") !== undefined) textProps.y = num("y");
-        if (num("size") !== undefined) textProps.size = num("size");
-        if (str("color") !== undefined) textProps.color = str("color");
-        if (num("weight") !== undefined) textProps.weight = num("weight");
+        const contentVal = str("content");
+        if (contentVal !== undefined) textProps.content = contentVal;
+        const startVal = num("start");
+        if (startVal !== undefined) textProps.start = startVal;
+        const durationVal = num("duration");
+        if (durationVal !== undefined) textProps.duration = durationVal;
+        const xVal = num("x");
+        if (xVal !== undefined) textProps.x = xVal;
+        const yVal = num("y");
+        if (yVal !== undefined) textProps.y = yVal;
+        const sizeVal = num("size");
+        if (sizeVal !== undefined) textProps.size = sizeVal;
+        const colorVal = str("color");
+        if (colorVal !== undefined) textProps.color = colorVal;
+        const weightVal = num("weight");
+        if (weightVal !== undefined) textProps.weight = weightVal;
         const clip = get().addTextClip(textProps);
         return `Text added: "${clip.text?.content}" at ${clip.start.toFixed(2)}s for ${clip.duration.toFixed(1)}s`;
       }
@@ -513,12 +522,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const clip = resolveClip();
         if (!clip || !clip.text) return "ERROR: no text clip found";
         const t = { ...clip.text };
-        if (str("content") !== undefined) t.content = str("content");
-        if (num("x") !== undefined) t.x = Math.min(1, Math.max(0, num("x")));
-        if (num("y") !== undefined) t.y = Math.min(1, Math.max(0, num("y")));
-        if (num("size") !== undefined) t.size = Math.max(8, num("size"));
-        if (str("color") !== undefined) t.color = str("color");
-        if (num("weight") !== undefined) t.weight = num("weight");
+        const contentVal = str("content");
+        if (contentVal !== undefined) t.content = contentVal;
+        const xVal = num("x");
+        if (xVal !== undefined) t.x = Math.min(1, Math.max(0, xVal));
+        const yVal = num("y");
+        if (yVal !== undefined) t.y = Math.min(1, Math.max(0, yVal));
+        const sizeVal = num("size");
+        if (sizeVal !== undefined) t.size = Math.max(8, sizeVal);
+        const colorVal = str("color");
+        if (colorVal !== undefined) t.color = colorVal;
+        const weightVal = num("weight");
+        if (weightVal !== undefined) t.weight = weightVal;
         get().pushUndo();
         get().updateClip(clip.id, { text: t, label: t.content.slice(0, 24) });
         return `Text updated: "${t.content}"`;
@@ -554,10 +569,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       case "tts": {
         const text = (str("text") ?? "").slice(0, 5000);
         if (!text) return "ERROR: text required";
-        const item = await get().addTtsAudio(text, {
-          voice: str("voice"),
-          locale: str("locale"),
-        });
+        const ttsOpts: { voice?: string; locale?: string } = {};
+        const voiceVal = str("voice");
+        if (voiceVal !== undefined) ttsOpts.voice = voiceVal;
+        const localeVal = str("locale");
+        if (localeVal !== undefined) ttsOpts.locale = localeVal;
+
+        const item = await get().addTtsAudio(text, ttsOpts);
         const clip = get().addClipForMedia(item.id, num("start"));
         return clip
           ? `Voiceover added at ${clip.start.toFixed(2)}s (${item.duration.toFixed(1)}s): "${text.slice(0, 40)}"`
