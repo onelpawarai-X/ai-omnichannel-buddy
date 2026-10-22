@@ -15554,6 +15554,40 @@ const TOOLS: RegisteredTool[] = [
       return ok(`Imported ${ref.type} "${ref.name}" (${ref.durationSec.toFixed(2)}s)`, ref);
     },
   },
+  {
+    name: "generate_image",
+    domain: "media",
+    title: "Generate an image",
+    description:
+      "Generate a new image from a text prompt with a keyless image service and add it to the media library. Use it for backgrounds, b-roll stills, titles, thumbnails and inserts the user asks for. Returns the mediaId to place with add_clip or a sticker/shape overlay. Requires an open project and network access.",
+    inputSchema: obj(
+      {
+        prompt: str,
+        size: str,
+        name: str,
+        seed: num,
+      },
+      ["prompt"],
+    ),
+    readOnly: false,
+    destructive: false,
+    expensive: false,
+    handler: async (args, host) => {
+      if (typeof host.generateImage !== "function") {
+        return fail("generate_image is not available in this host", "UNSUPPORTED");
+      }
+      const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
+      if (!prompt) return fail("Describe the image you want in `prompt`.", "BAD_INPUT");
+      host.requireOpenProject();
+      const ref = await host.generateImage({
+        prompt,
+        size: typeof args.size === "string" ? args.size : undefined,
+        name: typeof args.name === "string" ? args.name : undefined,
+        seed: typeof args.seed === "number" ? args.seed : undefined,
+      });
+      return ok(`Generated image "${ref.name}"`, ref);
+    },
+  },
   actionTool({ name: "delete_media", domain: "media", actionType: "media/delete", title: "Delete media", description: "Delete a media library item.", inputSchema: obj({ mediaId: str }, ["mediaId"]), destructive: true }),
   actionTool({ name: "rename_media", domain: "media", actionType: "media/rename", title: "Rename media", description: "Rename a media item.", inputSchema: obj({ mediaId: str, name: str }, ["mediaId", "name"]) }),
 

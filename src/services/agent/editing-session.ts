@@ -4,7 +4,15 @@ import { editSnapshot, type EditSnapshot } from "@openreel/core/actions/handlers
 import { createPortableEdit } from "@openreel/core/editing/portable-project";
 import { TitleEngine } from "@openreel/core/text/title-engine";
 import type { Project, Action } from "@openreel/core";
-import type { EditingHost, TxnHandle, TextOverlayOptions, UpdateTextOverlayOptions } from "@openreel/agent";
+import type {
+  EditingHost,
+  TxnHandle,
+  TextOverlayOptions,
+  UpdateTextOverlayOptions,
+  ImportedMediaRef,
+  GenerateImageOptions,
+  GeneratedImageRef,
+} from "@openreel/agent";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
 import { getMediaBridge, initializeMediaBridge } from "../../bridges/media-bridge";
@@ -12,6 +20,33 @@ import { getMediaBridge, initializeMediaBridge } from "../../bridges/media-bridg
 export function cloneEditSnapshot(snapshot: EditSnapshot): EditSnapshot {
   return { ...JSON.parse(JSON.stringify({ ...snapshot, mediaLibrary: undefined })), mediaLibrary: { items: snapshot.mediaLibrary.items.map((m) => ({ ...m })) } } as EditSnapshot;
 }
+const IMAGE_SIZE_BY_ASPECT: Record<string, readonly [number, number]> = {
+  "1:1": [1024, 1024],
+  "16:9": [1280, 720],
+  "9:16": [720, 1280],
+  "4:3": [1024, 768],
+  "3:4": [768, 1024],
+  "3:2": [1200, 800],
+  "2:3": [800, 1200],
+  "21:9": [1536, 658],
+};
+
+/** Accept "16:9", "1280x720", or nothing (square). */
+function imageSize(size?: string): { width: number; height: number } {
+  const value = size?.trim();
+  if (value) {
+    const aspect = IMAGE_SIZE_BY_ASPECT[value];
+    if (aspect) return { width: aspect[0], height: aspect[1] };
+    const match = /^(\d{2,5})x(\d{2,5})$/i.exec(value);
+    if (match) {
+      const width = Number(match[1]);
+      const height = Number(match[2]);
+      if (width >= 64 && height >= 64 && width <= 4096 && height <= 4096) return { width, height };
+    }
+  }
+  return { width: 1024, height: 1024 };
+}
+
 const blobRevisions = new WeakMap<Blob, number>();
 let nextBlobRevision = 0;
 const blobRevision = (blob: Blob | null): number => { if (!blob) return 0; if (!blobRevisions.has(blob)) blobRevisions.set(blob, ++nextBlobRevision); return blobRevisions.get(blob)!; };
@@ -82,6 +117,91 @@ export class EditingSession implements EditingHost {
     createPortableEdit(project); // Check actual decoded source ranges before publishing.
     this.replaceDraft(project);
   }
+  /**
+   * Decode a file and add it to the draft media library, without committing.
+   * Shared by URL import and image generation so both go through the same
+   * decoder that the manual import path uses.
+   */
+  private async addMediaFile(file: File, requestedName?: string): Promise<ImportedMediaRef> {
+    if (!getMediaBridge().isInitialized()) await initializeMediaBridge();
+    const result = await getMediaBridge().importFile(file, true);
+    if (!result.success || !result.media) throw new Error(result.error ?? "Could not decode media");
+    const decoded = result.media;
+    const type = decoded.metadata.hasVideo ? "video" : decoded.metadata.hasAudio ? "audio" : "image";
+    const mediaId = crypto.randomUUID();
+    const name = requestedName ?? file.name;
+    const asset = {
+      id: mediaId,
+      name,
+      type,
+      blob: file,
+      fileHandle: null,
+      isPlaceholder: false,
+      sourceFile: { name, size: file.size, lastModified: file.lastModified },
+      metadata: {
+        duration: decoded.metadata.duration ?? 0,
+        width: decoded.metadata.width ?? 0,
+        height: decoded.metadata.height ?? 0,
+        frameRate: decoded.metadata.frameRate ?? 0,
+        codec: decoded.metadata.codec ?? "",
+        sampleRate: decoded.metadata.sampleRate ?? 0,
+        channels: decoded.metadata.channels ?? 0,
+        fileSize: file.size,
+      },
+      thumbnailUrl: decoded.thumbnails?.[0]?.dataUrl ?? null,
+      waveformData: decoded.waveformData?.peaks ?? null,
+    } as unknown as Project["mediaLibrary"]["items"][number];
+    const project = { ...this.draft, mediaLibrary: { items: [...this.draft.mediaLibrary.items, asset] } };
+    createPortableEdit(project); // Validate the decoded source before publishing.
+    this.replaceDraft(project);
+    return {
+      mediaId,
+      name,
+      type,
+      durationSec: decoded.metadata.duration ?? 0,
+      width: decoded.metadata.width || undefined,
+      height: decoded.metadata.height || undefined,
+    };
+  }
+
+  /** Download a public http(s) file straight into the media library. */
+  async importMediaFromUrl(url: string, options?: { name?: string }): Promise<ImportedMediaRef> {
+    this.requireOpenProject();
+    let response: Response;
+    try {
+      response = await fetch(url, { credentials: "omit", redirect: "follow" });
+    } catch {
+      throw new Error(`Could not download ${url}. The host blocked the browser request (CORS) or the URL is unreachable.`);
+    }
+    if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("The download was empty");
+    const path = (() => { try { return new URL(url).pathname; } catch { return ""; } })();
+    const base = path.split("/").filter(Boolean).pop();
+    const name = options?.name ?? (base && base.includes(".") ? decodeURIComponent(base) : `media-${Date.now()}.${blob.type.split("/")[1] || "bin"}`);
+    return await this.addMediaFile(new File([blob], name, { type: blob.type || "application/octet-stream" }), name);
+  }
+
+  /** Keyless text-to-image, added straight to the media library. */
+  async generateImage(options: GenerateImageOptions): Promise<GeneratedImageRef> {
+    this.requireOpenProject();
+    const { width, height } = imageSize(options.size);
+    const seed = options.seed ?? Math.floor(Math.random() * 1_000_000);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(options.prompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    let response: Response;
+    try {
+      response = await fetch(url, { credentials: "omit", redirect: "follow" });
+    } catch {
+      throw new Error("Could not reach the image service. Check the network connection.");
+    }
+    if (!response.ok) throw new Error(`Image generation failed: HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("The image service returned an empty image.");
+    const name = options.name ?? `generated-${Date.now()}.png`;
+    const ref = await this.addMediaFile(new File([blob], name, { type: blob.type || "image/png" }), name);
+    return { mediaId: ref.mediaId, name: ref.name, width: ref.width ?? width, height: ref.height ?? height };
+  }
+
   async createTextOverlay(options: TextOverlayOptions) {
     let trackId = options.trackId ?? this.draft.timeline.tracks.find((t) => t.type === "text")?.id;
     if (!trackId) {

@@ -68,12 +68,8 @@ export interface MediaItem {
   readonly originalUrl?: string;
   /** File hint stored in JSON for cross-session/cross-machine asset matching */
   readonly sourceFile?: { name: string; size: number; lastModified: number; folder?: string };
-  /** True while a background KieAI generation task is in progress */
+  /** True while a background generation task is still producing this asset. */
   readonly isPending?: boolean;
-  /** True when polling exhausted all retries — shows manual retry button */
-  readonly kieaiError?: boolean;
-  /** KieAI task ID used to poll for completion */
-  readonly kieaiTaskId?: string;
 }
 
 /** Thumbnail for filmstrip display in timeline */

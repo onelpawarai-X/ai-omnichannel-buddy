@@ -1,11 +1,40 @@
 import { create } from "zustand";
+import {
+  AI_PROVIDER_DEFAULTS,
+  providerPreset,
+  resolveWire,
+  type AIProviderId,
+  type AIWireFormat,
+} from "./ai-provider-catalog";
 
-export type AIProvider = "openai" | "anthropic" | "compatible";
-export const AI_PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o" },
-  anthropic: { baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-5" },
-  compatible: { baseUrl: "http://localhost:1234/v1", model: "local-model" },
-};
-interface AIConnectionState { provider: AIProvider; baseUrl: string; model: string; apiKey: string; configure: (options: Partial<Pick<AIConnectionState, "provider" | "baseUrl" | "model" | "apiKey">>) => void; forgetKey: () => void }
-/** Intentionally no persistence: keys and connection details stay in this tab. */
-export const useAIConnectionStore = create<AIConnectionState>((set) => ({ provider: "openai", ...AI_PROVIDER_DEFAULTS.openai, apiKey: "", configure: (options) => set(options), forgetKey: () => set({ apiKey: "" }) }));
+export { AI_PROVIDER_DEFAULTS, resolveWire };
+export type { AIProviderId, AIWireFormat };
+/** Legacy alias: the provider id the connection currently targets. */
+export type AIProvider = AIProviderId;
+
+interface AIConnectionState {
+  provider: AIProviderId;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  configure: (
+    options: Partial<Pick<AIConnectionState, "provider" | "baseUrl" | "model" | "apiKey">>,
+  ) => void;
+  forgetKey: () => void;
+}
+
+const DEFAULT_PROVIDER: AIProviderId = "zyraxon";
+const defaultPreset = providerPreset(DEFAULT_PROVIDER);
+
+/**
+ * Intentionally no persistence: keys and connection details stay in this tab.
+ * Defaults to the keyless ZYRAXON gateway so the editor is usable immediately.
+ */
+export const useAIConnectionStore = create<AIConnectionState>((set) => ({
+  provider: DEFAULT_PROVIDER,
+  baseUrl: defaultPreset.baseUrl,
+  model: defaultPreset.defaultModel,
+  apiKey: "",
+  configure: (options) => set(options),
+  forgetKey: () => set({ apiKey: "" }),
+}));

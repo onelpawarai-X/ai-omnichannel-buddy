@@ -229,7 +229,6 @@ declare global {
       cloud: {
         fetch(
           service:
-            | "elevenlabs"
             | "openai"
             | "anthropic"
             | "openai-compatible"

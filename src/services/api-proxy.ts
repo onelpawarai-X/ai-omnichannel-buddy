@@ -10,12 +10,6 @@
 const isDev = import.meta.env.DEV;
 
 const DIRECT_CONFIG = {
-  elevenlabs: {
-    baseUrl: "https://api.elevenlabs.io/v1",
-    authHeaders: (key: string): Record<string, string> => ({
-      "xi-api-key": key,
-    }),
-  },
   openai: {
     baseUrl: "https://api.openai.com/v1",
     authHeaders: (key: string): Record<string, string> => ({

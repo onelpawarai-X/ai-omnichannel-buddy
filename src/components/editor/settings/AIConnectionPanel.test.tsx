@@ -11,7 +11,7 @@ describe("AI settings session connections", () => {
     render(<AIConnectionPanel />);
     fireEvent.change(screen.getByLabelText("AI provider"), { target: { value: "compatible" } });
     fireEvent.change(screen.getByLabelText("AI base URL"), { target: { value: "http://localhost:11434/v1" } });
-    fireEvent.change(screen.getByLabelText("AI model ID"), { target: { value: "my-custom/model" } });
+    fireEvent.change(screen.getByLabelText("Custom model ID"), { target: { value: "my-custom/model" } });
     expect(useAIConnectionStore.getState()).toMatchObject({ provider: "compatible", baseUrl: "http://localhost:11434/v1", model: "my-custom/model", apiKey: "" });
   });
   it("masks and forgets the session key without writing credentials to browser storage", () => {

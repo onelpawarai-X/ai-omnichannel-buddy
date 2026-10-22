@@ -192,6 +192,21 @@ export interface MulticamHostBridge {
   previewFrame(groupId: string, timeMs: number): Promise<JobResult>;
 }
 
+export interface GenerateImageOptions {
+  readonly prompt: string;
+  /** Square by default; pass an aspect like 16:9 or a pixel size like 1280x720. */
+  readonly size?: string;
+  readonly name?: string;
+  readonly seed?: number;
+}
+
+export interface GeneratedImageRef {
+  readonly mediaId: string;
+  readonly name: string;
+  readonly width?: number;
+  readonly height?: number;
+}
+
 export interface CreateProjectOptions {
   readonly name?: string;
   readonly width?: number;
@@ -254,6 +269,12 @@ export interface EditingHost {
   listProjects?(): Promise<readonly ProjectRef[]>;
   saveProject?(): Promise<ProjectRef>;
   importMediaFromUrl?(url: string, options?: { name?: string }): Promise<ImportedMediaRef>;
+  /**
+   * Generate an image from a text prompt and add it to the media library.
+   * Optional: it needs network access to a keyless image service, which only
+   * the live web host provides.
+   */
+  generateImage?(options: GenerateImageOptions): Promise<GeneratedImageRef>;
   /**
    * Render a motion composition to a finished video file (mp4 / transparent
    * WebM / ProRes 4444 MOV). Optional because it needs the renderer-side motion

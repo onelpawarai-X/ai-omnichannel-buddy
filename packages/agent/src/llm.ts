@@ -68,6 +68,18 @@ export type LoopToolResultBlock =
       };
     };
 
+/**
+ * A file the user attached to their message, base64-encoded. The app decides
+ * which kinds to send, based on the selected model's declared input modalities;
+ * the transport only serializes whatever it is given.
+ */
+export interface LoopUserAttachment {
+  readonly kind: "image" | "audio" | "video" | "pdf";
+  readonly mediaType: string;
+  readonly data: string;
+  readonly name?: string;
+}
+
 export interface LoopToolResult {
   readonly toolUseId: string;
   readonly content: string | LoopToolResultBlock[];
@@ -75,7 +87,7 @@ export interface LoopToolResult {
 }
 
 export type LoopMessage =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string; attachments?: readonly LoopUserAttachment[] }
   | { role: "assistant"; content: string; toolUses: LLMToolUse[] }
   | { role: "tool"; results: LoopToolResult[] };
 
@@ -214,7 +226,22 @@ export function buildAnthropicBody(
 ): unknown {
   const messages = input.messages.map((m) => {
     if (m.role === "user") {
-      return { role: "user", content: [{ type: "text", text: m.content }] };
+      const content: unknown[] = [];
+      if (m.content) content.push({ type: "text", text: m.content });
+      for (const attachment of m.attachments ?? []) {
+        if (attachment.kind === "image" || attachment.kind === "pdf") {
+          content.push({
+            type: attachment.kind === "pdf" ? "document" : "image",
+            source: {
+              type: "base64",
+              media_type: attachment.mediaType,
+              data: attachment.data,
+            },
+          });
+        }
+      }
+      if (!content.length) content.push({ type: "text", text: "" });
+      return { role: "user", content };
     }
     if (m.role === "assistant") {
       const content: unknown[] = [];
@@ -306,7 +333,35 @@ export function buildOpenAIBody(
   if (input.system) messages.push({ role: "system", content: input.system });
   for (const m of input.messages) {
     if (m.role === "user") {
-      messages.push({ role: "user", content: m.content });
+      const attachments = m.attachments ?? [];
+      if (!attachments.length) {
+        messages.push({ role: "user", content: m.content });
+      } else {
+        const parts: unknown[] = [];
+        if (m.content) parts.push({ type: "text", text: m.content });
+        for (const attachment of attachments) {
+          const dataUrl = `data:${attachment.mediaType};base64,${attachment.data}`;
+          if (attachment.kind === "image") {
+            parts.push({ type: "image_url", image_url: { url: dataUrl } });
+          } else if (attachment.kind === "audio") {
+            parts.push({
+              type: "input_audio",
+              input_audio: {
+                data: attachment.data,
+                format: attachment.mediaType.split("/")[1] ?? "wav",
+              },
+            });
+          } else if (attachment.kind === "video") {
+            parts.push({ type: "video_url", video_url: { url: dataUrl } });
+          } else {
+            parts.push({
+              type: "file",
+              file: { filename: attachment.name ?? "attachment.pdf", file_data: dataUrl },
+            });
+          }
+        }
+        messages.push({ role: "user", content: parts });
+      }
     } else if (m.role === "assistant") {
       messages.push({
         role: "assistant",

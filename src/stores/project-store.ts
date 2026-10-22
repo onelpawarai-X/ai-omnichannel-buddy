@@ -166,12 +166,10 @@ export interface ProjectState {
   replaceMediaAsset: (mediaId: string, file: File, sourceFolder?: string) => Promise<ActionResult>;
   renameMedia: (mediaId: string, name: string) => Promise<ActionResult>;
   getMediaItem: (mediaId: string) => MediaItem | undefined;
-  /** Add a pending placeholder for a background KieAI task */
+  /** Add a placeholder the editor can relink to a real file later. */
   addPlaceholderMedia: (item: MediaItem) => void;
-  /** Replace a pending placeholder with the actual result blob */
+  /** Replace a placeholder with the actual result blob */
   replacePlaceholderMedia: (mediaId: string, blob: Blob, name: string) => Promise<void>;
-  /** Flip isPending / kieaiError flags on a placeholder without full replacement */
-  setKieAIItemState: (mediaId: string, isPending: boolean, kieaiError: boolean) => void;
 
   // Track actions
   addTrack: (
@@ -1924,20 +1922,6 @@ export const useProjectStore = create<ProjectState>()(
         });
       },
 
-      setKieAIItemState: (mediaId: string, isPending: boolean, kieaiError: boolean) => {
-        const { project } = get();
-        const updatedItems = project.mediaLibrary.items.map((item) =>
-          item.id === mediaId ? { ...item, isPending, kieaiError } : item,
-        );
-        set({
-          project: {
-            ...project,
-            mediaLibrary: { ...project.mediaLibrary, items: updatedItems },
-            modifiedAt: Date.now(),
-          },
-        });
-      },
-
       replacePlaceholderMedia: async (mediaId: string, blob: Blob, name: string) => {
         const { project } = get();
 
@@ -1971,7 +1955,7 @@ export const useProjectStore = create<ProjectState>()(
               reader.readAsDataURL(thumbBlob);
             });
           } catch (thumbErr) {
-            console.warn("[ProjectStore] KieAI thumbnail generation failed:", thumbErr);
+            console.warn("[ProjectStore] Thumbnail generation failed:", thumbErr);
           }
         }
 
@@ -2014,7 +1998,7 @@ export const useProjectStore = create<ProjectState>()(
         try {
           await saveMediaBlob(project.id, mediaId, file, updatedItem.metadata);
         } catch (err) {
-          console.error("[ProjectStore] Failed to persist KieAI result blob:", err);
+          console.error("[ProjectStore] Failed to persist result blob:", err);
         }
       },
 

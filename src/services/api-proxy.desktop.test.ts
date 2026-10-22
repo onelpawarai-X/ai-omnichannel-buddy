@@ -37,10 +37,10 @@ describe("apiFetch desktop branch", () => {
   });
 
   it("forwards renderer headers and defaults a missing method/body", async () => {
-    await apiFetch("elevenlabs", "/voices", "IGNORED", {
+    await apiFetch("openai", "/voices", "IGNORED", {
       headers: { "x-custom": "v" },
     });
-    expect(cloudFetch).toHaveBeenCalledWith("elevenlabs", "/voices", {
+    expect(cloudFetch).toHaveBeenCalledWith("openai", "/voices", {
       method: undefined,
       headers: { "x-custom": "v" },
       body: undefined,

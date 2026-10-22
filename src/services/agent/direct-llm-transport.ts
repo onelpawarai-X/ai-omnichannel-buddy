@@ -1,7 +1,14 @@
 import { makeClientFromSend, withRetry, LLMHttpError, parseRetryAfterMs, type LLMClient } from "@openreel/agent";
-import type { AIProvider } from "../../stores/ai-connection-store";
+import { resolveWire, type AIProviderId } from "../../stores/ai-connection-store";
 
-export interface DirectConnection { provider: AIProvider; baseUrl: string; model: string; apiKey: string; signal?: AbortSignal }
+export interface DirectConnection {
+  provider: AIProviderId;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  signal?: AbortSignal;
+}
+
 export function validateAIEndpoint(baseUrl: string): string {
   const url = new URL(baseUrl.trim());
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
@@ -9,11 +16,12 @@ export function validateAIEndpoint(baseUrl: string): string {
   url.pathname = url.pathname.replace(/\/(?:chat\/completions|messages)\/?$/, "");
   return url.href.replace(/\/+$/, "");
 }
+
 export function makeDirectBYOKClient(options: DirectConnection): LLMClient {
   const baseUrl = validateAIEndpoint(options.baseUrl);
   if (!options.model.trim()) throw new Error("Enter a model ID that supports tools.");
   if (options.apiKey && /[\r\n]/.test(options.apiKey)) throw new Error("Invalid API key.");
-  const provider = options.provider === "anthropic" ? "anthropic" : "openai";
+  const provider = resolveWire(options.provider);
   const send = withRetry(async (body: unknown) => {
     options.signal?.throwIfAborted();
     let res: Response;
