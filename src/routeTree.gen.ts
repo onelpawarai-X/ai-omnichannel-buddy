@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAssetsRouteImport } from './routes/api/assets'
 import { Route as ApiCommandRouteImport } from './routes/api/command'
+import { Route as ApiLottieRouteImport } from './routes/api/lottie'
 import { Route as ApiMediaRouteImport } from './routes/api/media'
+import { Route as ApiStockRouteImport } from './routes/api/stock'
 import { Route as ApiYoutubeRouteImport } from './routes/api/youtube'
 import { Route as ApiRendersNameRouteImport } from './routes/api/renders.$name'
 
@@ -31,9 +33,19 @@ const ApiCommandRoute = ApiCommandRouteImport.update({
   path: '/api/command',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLottieRoute = ApiLottieRouteImport.update({
+  id: '/api/lottie',
+  path: '/api/lottie',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMediaRoute = ApiMediaRouteImport.update({
   id: '/api/media',
   path: '/api/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStockRoute = ApiStockRouteImport.update({
+  id: '/api/stock',
+  path: '/api/stock',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiYoutubeRoute = ApiYoutubeRouteImport.update({
@@ -51,7 +63,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/assets': typeof ApiAssetsRoute
   '/api/command': typeof ApiCommandRoute
+  '/api/lottie': typeof ApiLottieRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/stock': typeof ApiStockRoute
   '/api/youtube': typeof ApiYoutubeRoute
   '/api/renders/$name': typeof ApiRendersNameRoute
 }
@@ -59,7 +73,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/assets': typeof ApiAssetsRoute
   '/api/command': typeof ApiCommandRoute
+  '/api/lottie': typeof ApiLottieRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/stock': typeof ApiStockRoute
   '/api/youtube': typeof ApiYoutubeRoute
   '/api/renders/$name': typeof ApiRendersNameRoute
 }
@@ -68,7 +84,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/assets': typeof ApiAssetsRoute
   '/api/command': typeof ApiCommandRoute
+  '/api/lottie': typeof ApiLottieRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/stock': typeof ApiStockRoute
   '/api/youtube': typeof ApiYoutubeRoute
   '/api/renders/$name': typeof ApiRendersNameRoute
 }
@@ -78,7 +96,9 @@ export interface FileRouteTypes {
     | '/'
     | '/api/assets'
     | '/api/command'
+    | '/api/lottie'
     | '/api/media'
+    | '/api/stock'
     | '/api/youtube'
     | '/api/renders/$name'
   fileRoutesByTo: FileRoutesByTo
@@ -86,7 +106,9 @@ export interface FileRouteTypes {
     | '/'
     | '/api/assets'
     | '/api/command'
+    | '/api/lottie'
     | '/api/media'
+    | '/api/stock'
     | '/api/youtube'
     | '/api/renders/$name'
   id:
@@ -94,7 +116,9 @@ export interface FileRouteTypes {
     | '/'
     | '/api/assets'
     | '/api/command'
+    | '/api/lottie'
     | '/api/media'
+    | '/api/stock'
     | '/api/youtube'
     | '/api/renders/$name'
   fileRoutesById: FileRoutesById
@@ -103,7 +127,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAssetsRoute: typeof ApiAssetsRoute
   ApiCommandRoute: typeof ApiCommandRoute
+  ApiLottieRoute: typeof ApiLottieRoute
   ApiMediaRoute: typeof ApiMediaRoute
+  ApiStockRoute: typeof ApiStockRoute
   ApiYoutubeRoute: typeof ApiYoutubeRoute
   ApiRendersNameRoute: typeof ApiRendersNameRoute
 }
@@ -131,11 +157,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCommandRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/lottie': {
+      id: '/api/lottie'
+      path: '/api/lottie'
+      fullPath: '/api/lottie'
+      preLoaderRoute: typeof ApiLottieRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/media': {
       id: '/api/media'
       path: '/api/media'
       fullPath: '/api/media'
       preLoaderRoute: typeof ApiMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stock': {
+      id: '/api/stock'
+      path: '/api/stock'
+      fullPath: '/api/stock'
+      preLoaderRoute: typeof ApiStockRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/youtube': {
@@ -159,7 +199,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAssetsRoute: ApiAssetsRoute,
   ApiCommandRoute: ApiCommandRoute,
+  ApiLottieRoute: ApiLottieRoute,
   ApiMediaRoute: ApiMediaRoute,
+  ApiStockRoute: ApiStockRoute,
   ApiYoutubeRoute: ApiYoutubeRoute,
   ApiRendersNameRoute: ApiRendersNameRoute,
 }

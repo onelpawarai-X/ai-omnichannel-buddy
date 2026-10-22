@@ -39,6 +39,8 @@ export function Stage(): React.ReactElement {
   const duration = useMemo(() => Math.max(1, timelineEnd(timeline.clips)), [timeline.clips]);
   const muted = timeline.tracks.length > 0 && timeline.tracks.every((t) => t.muted);
   const [silent, setSilent] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const notify = useEditor((s) => s.notify);
 
   // create the player once
   useEffect(() => {
@@ -129,9 +131,28 @@ export function Stage(): React.ReactElement {
     else void canvas.requestFullscreen?.();
   };
 
+  const dropFiles = async (event: React.DragEvent): Promise<void> => {
+    event.preventDefault();
+    setDragging(false);
+    const files = [...event.dataTransfer.files];
+    if (!files.length) return;
+    const created = await useEditor.getState().addFiles(files);
+    if (created.length) notify(`${created.length} ফাইল পুলে যোগ হয়েছে`, "success");
+  };
+
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-background">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4">
+    <section className="glass flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
+      <div
+        className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 transition-colors ${
+          dragging ? "bg-primary/5" : ""
+        }`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => void dropFiles(event)}
+      >
         <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(circle_at_20%_10%,oklch(0.82_0.16_195/0.14),transparent_45%),radial-gradient(circle_at_85%_80%,oklch(0.62_0.2_300/0.12),transparent_50%)]" />
         <canvas
           ref={canvasRef}
@@ -142,15 +163,17 @@ export function Stage(): React.ReactElement {
         />
         {timeline.clips.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-medium text-foreground/80">স্টুডিও খালি</p>
+            <p className="text-sm font-medium text-foreground/80">
+              {dragging ? "এখানে ছেড়ে দিন" : "স্টুডিও খালি"}
+            </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              মিডিয়া প্যানেল থেকে ভিডিও, অডিও বা ছবি যোগ করুন — অথবা চ্যাটে লিখে এজেন্টকে বলুন কী বানাতে হবে।
+              ভিডিও, অডিও বা ছবি এখানে টেনে আনুন, মিডিয়া প্যানেল থেকে যোগ করুন — অথবা চ্যাটে লিখে এজেন্টকে বলুন কী বানাতে হবে।
             </p>
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+      <div className="flex items-center gap-2.5 border-t border-white/5 px-4 py-2.5">
         <button type="button" className="btn-ghost h-8 w-8" onClick={() => step(-1 / timeline.project.fps)} title="এক ফ্রেম পিছনে">
           <SkipBack className="h-4 w-4" />
         </button>

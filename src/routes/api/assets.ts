@@ -146,6 +146,44 @@ async function searchYouTube(query: string, limit: number): Promise<Asset[]> {
   return [];
 }
 
+type PipedTrending = Array<{ url?: string; title?: string; uploaderName?: string; duration?: number; thumbnail?: string; views?: number }>;
+
+const PIPED_HOSTS = ["https://api.piped.private.coffee", "https://pipedapi.adminforge.de", "https://api.piped.yt"];
+
+/**
+ * A browsable shelf of YouTube videos. Trending when there is no query, search
+ * otherwise, so the panel always has something to show without the user typing.
+ */
+async function browseYouTube(query: string, region: string, limit: number): Promise<Asset[]> {
+  for (const host of PIPED_HOSTS) {
+    const url = query
+      ? `${host}/search?q=${encodeURIComponent(query)}&filter=videos`
+      : `${host}/trending?region=${encodeURIComponent(region)}`;
+    const json = await getJson<PipedSearch | PipedTrending>(url, 14000);
+    const items = Array.isArray(json) ? json : json?.items;
+    if (!items?.length) continue;
+    const out: Asset[] = [];
+    for (const item of items.slice(0, limit)) {
+      if (!item.url) continue;
+      const id = item.url.replace(/^\/watch\?v=/, "").split("&")[0] ?? "";
+      if (!id) continue;
+      const asset: Asset = {
+        id: `youtube:${id}`,
+        kind: "youtube",
+        title: item.title ?? id,
+        url: `https://www.youtube.com/watch?v=${id}`,
+        source: "YouTube",
+      };
+      if (item.thumbnail) asset.thumb = item.thumbnail;
+      if (item.uploaderName) asset.author = item.uploaderName;
+      if (item.duration) asset.duration = item.duration;
+      out.push(asset);
+    }
+    if (out.length) return out;
+  }
+  return [];
+}
+
 /** Searches the open media libraries. Every source is public and needs no key. */
 export const Route = createFileRoute("/api/assets")({
   server: {
@@ -154,6 +192,13 @@ export const Route = createFileRoute("/api/assets")({
         const params = new URL(request.url).searchParams;
         const query = (params.get("q") ?? "").trim();
         const kind = params.get("kind") ?? "all";
+        // A browse request may legitimately have no query: the shelf falls back
+        // to YouTube trending so the panel is never empty.
+        if (kind === "browse") {
+          const region = params.get("region") ?? "US";
+          const shelf = await browseYouTube(query, region, Math.max(1, Math.min(40, Number(params.get("limit") ?? 24) || 24)));
+          return Response.json({ results: shelf, query, kind });
+        }
         const limit = Math.max(1, Math.min(40, Number(params.get("limit") ?? 20) || 20));
         if (!query) return Response.json({ results: [] });
 

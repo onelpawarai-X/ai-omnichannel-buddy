@@ -73,6 +73,12 @@ export type EditorState = {
   assetQuery: string;
   assetKind: string;
   assetResults: AssetResult[];
+  lottieResults: Array<{ title: string; url: string; thumb?: string }>;
+  lottieLoading: boolean;
+  lottieQuery: string;
+  stockResults: Array<{ id: string; title: string; url: string; thumb: string; category: string }>;
+  stockCategory: string;
+  stockLoading: boolean;
   assetLoading: boolean;
 
   // history
@@ -87,6 +93,8 @@ export type EditorActions = {
   undo: () => void;
   redo: () => void;
   addFiles: (files: File[]) => Promise<MediaItem[]>;
+  /** Add files to the pool *and* queue them as the next message's attachments. */
+  attachMedia: (files: File[]) => Promise<void>;
   addUrl: (url: string, kind?: MediaKind, name?: string) => Promise<MediaItem>;
   removeMedia: (mediaId: string) => void;
   attach: (attachment: AgentAttachment) => void;
@@ -104,6 +112,14 @@ export type EditorActions = {
   setAssetQuery: (query: string) => void;
   setAssetKind: (kind: string) => void;
   runAssetSearch: (query?: string, kind?: string) => Promise<void>;
+  /** Browse YouTube without a query: trending, or a search when one is given. */
+  browseYouTube: (query?: string) => Promise<void>;
+  /** Search the live LottieFiles catalogue and load a hit onto the timeline. */
+  searchLottie: (query: string) => Promise<void>;
+  loadLottieResult: (title: string, url: string) => Promise<void>;
+  /** Load one Mixkit stock shelf, and drop a stock video on the timeline. */
+  loadStockCategory: (category?: string) => Promise<void>;
+  importStockVideo: (video: { title: string; url: string; thumb?: string }) => Promise<void>;
   loadAnimation: (url: string, name?: string) => Promise<string>;
   importAsset: (asset: AssetResult) => Promise<void>;
   importYouTube: (input: string, mode: "video" | "audio") => Promise<void>;
@@ -210,6 +226,12 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
   assetKind: "all",
   assetResults: [],
   assetLoading: false,
+  lottieResults: [],
+  lottieLoading: false,
+  lottieQuery: "",
+  stockResults: [],
+  stockCategory: "abstract",
+  stockLoading: false,
 
   past: [],
   future: [],
@@ -303,6 +325,26 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
     return created;
   },
 
+  async attachMedia(files) {
+    // One pass only: registerMedia already extracts video stills and the audio
+    // spectrogram, so reuse that work for the attachment instead of doing it
+    // twice. Registering first is what makes an uploaded file visible in the
+    // media pool and on the preview - dropping it into the chat alone left the
+    // editor empty, so there was nothing on screen to edit.
+    for (const file of files) {
+      const kind = guessKind(file.type, file.name) ?? "image";
+      const url = URL.createObjectURL(file);
+      const item = await registerMedia(get, { url, name: file.name, kind, source: "upload" });
+      if (kind === "video") {
+        get().attach({ kind, name: item.name, url, frames: item.frames ?? [] });
+      } else if (kind === "audio") {
+        get().attach({ kind, name: item.name, url, ...(item.spectrogram ? { spectrogram: item.spectrogram } : {}) });
+      } else {
+        get().attach({ kind, name: item.name, url });
+      }
+    }
+  },
+
   async addUrl(url, kind, name) {
     const item = await registerMedia(get, { url, name: name ?? url.split("/").pop() ?? "media", ...(kind ? { kind } : {}) });
     get().notify(`"${item.name}" added`, "success");
@@ -352,6 +394,65 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
     } catch {
       set({ assetLoading: false });
       get().notify("asset search failed", "error");
+    }
+  },
+
+  async browseYouTube(query) {
+    const q = (query ?? get().assetQuery).trim();
+    set({ assetLoading: true, assetQuery: q, assetKind: "youtube" });
+    try {
+      const response = await fetch(`/api/assets?kind=browse&q=${encodeURIComponent(q)}&limit=24`);
+      const json = (await response.json()) as { results?: AssetResult[] };
+      set({ assetResults: json.results ?? [], assetLoading: false });
+    } catch {
+      set({ assetLoading: false });
+      get().notify("ইউটিউব থেকে আনা যায়নি", "error");
+    }
+  },
+
+  async searchLottie(query) {
+    const q = query.trim();
+    if (!q) return;
+    set({ lottieLoading: true });
+    try {
+      const response = await fetch(`/api/lottie?q=${encodeURIComponent(q)}&limit=32`);
+      const json = (await response.json()) as { results?: Array<{ title: string; url: string; thumb?: string }> };
+      set({ lottieResults: json.results ?? [], lottieLoading: false, lottieQuery: q });
+    } catch {
+      set({ lottieLoading: false });
+      get().notify("LottieFiles থেকে অ্যানিমেশন আনা যায়নি", "error");
+    }
+  },
+
+  async loadLottieResult(title, url) {
+    const id = await get().loadAnimation(url, title);
+    const entry = get().animations.find((a) => a.id === id);
+    await get().dispatch([{ op: "add_animation", animationId: id, ...(entry ? { duration: entry.duration } : {}) }]);
+    get().notify(`"${title}" টাইমলাইনে বসানো হয়েছে`, "success");
+  },
+
+  async loadStockCategory(category) {
+    const slug = category ?? get().stockCategory;
+    set({ stockLoading: true, stockCategory: slug });
+    try {
+      const response = await fetch(`/api/stock?category=${encodeURIComponent(slug)}&limit=30`);
+      const json = (await response.json()) as { results?: Array<{ id: string; title: string; url: string; thumb: string; category: string }> };
+      set({ stockResults: json.results ?? [], stockLoading: false });
+    } catch {
+      set({ stockLoading: false });
+      get().notify("স্টক লাইব্রেরি থেকে আনা যায়নি", "error");
+    }
+  },
+
+  async importStockVideo(video) {
+    try {
+      const item = await registerMedia(get, { url: video.url, name: video.title, kind: "video", source: "library" });
+      await get().dispatch([
+        { op: "add_clip", clip: { kind: "video", mediaId: item.id, label: video.title, ...(item.duration ? { duration: item.duration } : {}) } },
+      ]);
+      get().notify(`"${video.title}" টাইমলাইনে যোগ হয়েছে`, "success");
+    } catch {
+      get().notify("ভিডিওটি যোগ করা যায়নি", "error");
     }
   },
 
@@ -660,6 +761,16 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
         const item = await get().addUrl(url, kind, name);
         return { mediaId: item.id, name: item.name, duration: item.duration };
       },
+      async stockCategory(category?: string) {
+        const response = await fetch(`/api/stock?category=${encodeURIComponent(category ?? "abstract")}&limit=24`);
+        const json = (await response.json()) as { results?: unknown[] };
+        return json.results ?? [];
+      },
+      async searchLottie(query: string) {
+        const response = await fetch(`/api/lottie?q=${encodeURIComponent(query)}&limit=24`);
+        const json = (await response.json()) as { results?: unknown[] };
+        return json.results ?? [];
+      },
       async loadAnimation(url: string, name?: string) {
         const entry = await loadAnimationFromUrl(url, { ...(name ? { name } : {}) });
         const player = createPlayer(entry, detachedContainer());
@@ -684,17 +795,26 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
       }
     };
 
+    let streamedThisRound = false;
     const onEvent = (event: AgentEvent): void => {
       switch (event.type) {
         case "round":
+          streamedThisRound = false;
           set({ agentStep: `round ${event.index}/${event.max}` });
           break;
         case "assistant_delta":
+          streamedThisRound = true;
           pendingDelta += event.text;
           flushDelta();
           break;
         case "assistant_text":
           set({ agentStep: undefined });
+          // Prose that arrived without deltas - the wrap-up report, or a reply
+          // that came back whole. It was being dropped, so the agent's words
+          // never reached the chat.
+          if (!streamedThisRound && event.text.trim()) {
+            pushEntry({ id: uid("chat"), role: "assistant", text: event.text.trim(), at: Date.now() });
+          }
           break;
         case "tool":
           set({ agentStep: event.name });
@@ -734,8 +854,12 @@ export const useEditor = create<EditorState & EditorActions>((set, get) => ({
         agentBusy: false,
         agentStep: undefined,
       });
-      if (result.summary) {
-        pushEntry({ id: uid("chat"), role: "assistant", text: result.summary, at: Date.now() });
+      // The closing report may already be on screen as the agent's last line of
+      // prose. Only add it when it says something the chat does not already show.
+      const summary = result.summary.trim();
+      const recent = get().chat.slice(-4).map((entry) => entry.text.trim());
+      if (summary && !recent.includes(summary)) {
+        pushEntry({ id: uid("chat"), role: "assistant", text: summary, at: Date.now() });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "agent failed";

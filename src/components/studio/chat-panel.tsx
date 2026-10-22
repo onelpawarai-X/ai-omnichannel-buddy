@@ -26,8 +26,6 @@ import { useEditor } from "@/lib/editor-store";
 import { sortModelsBySpeed, type ZyraxonModel } from "@/lib/zyraxon";
 import { describeCapability, pickDefaultModel, toCapability } from "@/lib/engine/routing";
 import { ChatBubble } from "./chat-bubble";
-import { grabFrames, guessKind } from "@/lib/engine/media-pool";
-import { spectrogramOf } from "@/lib/engine/spectrogram";
 
 export function ChatPanel({ models }: { models: ZyraxonModel[] }): React.ReactElement {
   const chat = useEditor((s) => s.chat);
@@ -65,22 +63,10 @@ export function ChatPanel({ models }: { models: ZyraxonModel[] }): React.ReactEl
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat, busy]);
 
-  const attachFiles = async (files: File[]): Promise<void> => {
-    for (const file of files) {
-      const kind = guessKind(file.type, file.name) ?? "image";
-      const url = URL.createObjectURL(file);
-      if (kind === "video") {
-        const frames = await grabFrames(url, 4).catch(() => []);
-        attach({ kind, name: file.name, url, frames });
-      } else if (kind === "audio") {
-        // the provider reads pictures, not sound: send the spectrogram
-        const spectrogram = await spectrogramOf(url).catch(() => null);
-        attach({ kind, name: file.name, url, ...(spectrogram ? { spectrogram } : {}) });
-      } else {
-        attach({ kind, name: file.name, url });
-      }
-    }
-  };
+  // Files dropped here go into the media pool as well as onto the message, so
+  // the user sees them in the pool and on the preview and the agent has
+  // something real to edit.
+  const attachFiles = (files: File[]): Promise<void> => useEditor.getState().attachMedia(files);
 
   const submit = async (): Promise<void> => {
     const prompt = text.trim();
@@ -95,6 +81,7 @@ export function ChatPanel({ models }: { models: ZyraxonModel[] }): React.ReactEl
 
   return (
     <div
+      data-testid="chat-drop"
       className="flex min-h-0 flex-1 flex-col"
       onDragOver={(event) => {
         event.preventDefault();
@@ -107,7 +94,7 @@ export function ChatPanel({ models }: { models: ZyraxonModel[] }): React.ReactEl
         void attachFiles([...event.dataTransfer.files]);
       }}
     >
-      <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
+      <div className="flex items-center gap-1.5 border-b border-white/5 px-3 py-2">
         <Bot className="h-3.5 w-3.5 text-primary" />
         <span className="text-[11px] font-semibold text-foreground">এডিট এজেন্ট</span>
         <span className="chip !text-[9px]">{chat.length} মেসেজ</span>
@@ -127,7 +114,7 @@ export function ChatPanel({ models }: { models: ZyraxonModel[] }): React.ReactEl
         </select>
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {chat.length === 0 && (
           <div className="space-y-2 rounded-md border border-border bg-panel-2 p-2">
             <p className="text-[11px] font-medium text-foreground">কীভাবে শুরু করবেন</p>

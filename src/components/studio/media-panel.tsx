@@ -67,7 +67,7 @@ export function MediaPanel(): React.ReactElement {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-hidden p-3.5">
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className="btn-accent h-9 text-xs" onClick={() => inputRef.current?.click()} disabled={busy}>
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus2 className="h-3.5 w-3.5" />}

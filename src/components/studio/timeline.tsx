@@ -188,8 +188,8 @@ export function Timeline(): React.ReactElement {
   };
 
   return (
-    <section className="flex min-h-0 flex-col border-t border-border bg-panel">
-      <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
+    <section className="glass flex min-h-0 flex-col overflow-hidden rounded-xl">
+      <div className="flex items-center gap-1.5 border-b border-white/5 px-3 py-2">
         <button type="button" className="btn-ghost h-7 w-7" title="প্লেহেডে কাটুন" onClick={splitAtPlayhead}>
           <Scissors className="h-3.5 w-3.5" />
         </button>

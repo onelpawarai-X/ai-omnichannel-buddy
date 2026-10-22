@@ -49,44 +49,65 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.145 0.012 260);
-  --foreground: oklch(0.96 0.005 250);
-  --card: oklch(0.18 0.014 260);
-  --card-foreground: oklch(0.96 0.005 250);
-  --popover: oklch(0.2 0.015 260);
-  --popover-foreground: oklch(0.96 0.005 250);
-  --primary: oklch(0.82 0.16 195);
-  --primary-foreground: oklch(0.16 0.02 250);
-  --secondary: oklch(0.24 0.016 260);
-  --secondary-foreground: oklch(0.93 0.005 250);
-  --muted: oklch(0.22 0.015 260);
-  --muted-foreground: oklch(0.62 0.02 255);
-  --accent: oklch(0.82 0.16 195);
-  --accent-foreground: oklch(0.16 0.02 250);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.97 0.005 250);
-  --border: oklch(0.28 0.018 260);
-  --input: oklch(0.26 0.018 260);
-  --ring: oklch(0.82 0.16 195);
-  --panel: oklch(0.17 0.013 260);
-  --panel-2: oklch(0.2 0.014 260);
-  --panel-3: oklch(0.24 0.016 260);
-  --clip-video: oklch(0.48 0.11 195);
-  --clip-audio: oklch(0.55 0.12 85);
-  --clip-text: oklch(0.55 0.1 250);
+  --radius: 0.75rem;
+  /* Pitch black shell so the glass panels read as lit surfaces above it. */
+  --background: oklch(0.07 0.006 265);
+  --foreground: oklch(0.97 0.004 250);
+  --card: oklch(0.15 0.012 265);
+  --card-foreground: oklch(0.97 0.004 250);
+  --popover: oklch(0.17 0.014 265);
+  --popover-foreground: oklch(0.97 0.004 250);
+  --primary: oklch(0.84 0.15 195);
+  --primary-foreground: oklch(0.15 0.02 250);
+  --secondary: oklch(0.22 0.014 265);
+  --secondary-foreground: oklch(0.95 0.004 250);
+  --muted: oklch(0.2 0.013 265);
+  --muted-foreground: oklch(0.68 0.016 255);
+  --accent: oklch(0.84 0.15 195);
+  --accent-foreground: oklch(0.15 0.02 250);
+  --destructive: oklch(0.65 0.21 25);
+  --destructive-foreground: oklch(0.97 0.004 250);
+  --border: oklch(0.32 0.016 265);
+  --input: oklch(0.26 0.016 265);
+  --ring: oklch(0.84 0.15 195);
+  --panel: oklch(0.13 0.011 265);
+  --panel-2: oklch(0.17 0.013 265);
+  --panel-3: oklch(0.22 0.015 265);
+  --clip-video: oklch(0.52 0.11 195);
+  --clip-audio: oklch(0.58 0.12 85);
+  --clip-text: oklch(0.58 0.1 250);
   --playhead: oklch(0.95 0.21 25);
+  /* glass surfaces: a lit sheet over the black shell */
+  --glass: color-mix(in oklab, oklch(0.22 0.014 265) 62%, transparent);
+  --glass-strong: color-mix(in oklab, oklch(0.26 0.016 265) 78%, transparent);
+  --glass-line: color-mix(in oklab, white 9%, transparent);
+  --glass-line-bright: color-mix(in oklab, white 16%, transparent);
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     overscroll-behavior: none;
+    /* Two faint blooms keep the black from reading as flat, dead space. */
+    background-image:
+      radial-gradient(60rem 40rem at 12% -10%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%),
+      radial-gradient(50rem 34rem at 88% 110%, color-mix(in oklab, oklch(0.6 0.18 300) 10%, transparent), transparent 62%);
+    background-attachment: fixed;
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
   }
   ::-webkit-scrollbar {
     width: 8px;
@@ -109,17 +130,58 @@
   border-color: var(--color-border);
 }
 
+
+@utility hairline {
+  border-color: var(--glass-line);
+}
+
+/* Tab pill: quiet when idle, lit when active. */
+@utility tab-pill {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+  &:hover {
+    color: var(--color-foreground);
+    background-color: color-mix(in oklab, white 6%, transparent);
+  }
+}
+
+@utility tab-pill-active {
+  color: var(--color-foreground);
+  background-color: color-mix(in oklab, white 10%, transparent);
+  box-shadow:
+    0 1px 0 0 var(--glass-line-bright) inset,
+    0 8px 20px -14px oklch(0 0 0 / 0.9);
+}
+
 @utility btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
   border-radius: var(--radius-md);
+  border: 1px solid transparent;
   color: var(--color-muted-foreground);
-  transition: all 150ms;
+  transition: all 160ms ease;
   &:hover {
-    background-color: var(--color-panel-3);
+    border-color: var(--glass-line);
+    background-color: color-mix(in oklab, white 7%, transparent);
     color: var(--color-foreground);
+  }
+  &:disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 }
 
@@ -129,27 +191,82 @@
   justify-content: center;
   gap: 0.375rem;
   border-radius: var(--radius-md);
-  background-color: var(--color-primary);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-primary) 92%, white),
+    var(--color-primary)
+  );
   color: var(--color-primary-foreground);
   font-weight: 600;
-  transition: all 150ms;
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, white 45%, transparent) inset,
+    0 12px 26px -14px color-mix(in oklab, var(--color-primary) 70%, transparent);
+  transition: all 160ms ease;
   &:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
   }
   &:disabled {
     opacity: 0.4;
     pointer-events: none;
+    box-shadow: none;
   }
 }
 
 @utility chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   border-radius: 9999px;
-  border: 1px solid var(--color-border);
-  background-color: var(--color-panel-2);
-  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--glass-line);
+  background-color: color-mix(in oklab, white 5%, transparent);
+  padding: 0.2rem 0.6rem;
   font-size: 0.6875rem;
   color: var(--color-muted-foreground);
+}
+
+/* Section heading inside a panel: small, quiet, spaced. */
+@utility panel-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * Glass surfaces. Written as plain classes rather than @utility: the minifier
+ * drops the standard backdrop-filter when it sits beside the -webkit- fallback
+ * inside a @utility block, which left the panels flat.
+ */
+@layer utilities {
+  .glass {
+    background-color: var(--glass);
+    border: 1px solid var(--glass-line);
+    -webkit-backdrop-filter: blur(24px) saturate(1.35);
+    backdrop-filter: blur(24px) saturate(1.35);
+    box-shadow:
+      0 1px 0 0 var(--glass-line-bright) inset,
+      0 18px 44px -22px oklch(0 0 0 / 0.9);
+  }
+
+  .glass-strong {
+    background-color: var(--glass-strong);
+    border: 1px solid var(--glass-line);
+    -webkit-backdrop-filter: blur(28px) saturate(1.4);
+    backdrop-filter: blur(28px) saturate(1.4);
+    box-shadow:
+      0 1px 0 0 var(--glass-line-bright) inset,
+      0 26px 60px -26px oklch(0 0 0 / 0.95);
+  }
+
+  /* Inset well used for inputs and lists inside a glass panel. */
+  .well {
+    background-color: color-mix(in oklab, black 28%, transparent);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-md);
+  }
 }

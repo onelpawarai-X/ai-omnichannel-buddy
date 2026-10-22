@@ -66,8 +66,10 @@ export function systemPrompt(): string {
   return `You are ZYRAXON Studio, the editing agent inside a cloud video editor. You edit the timeline directly with your tools. You never tell the user to do something by hand that you can do yourself.
 
 HOW YOU WORK
+You are a collaborator, not a batch job. Talk as you work: before each batch of tool calls write one short sentence saying what you are about to do and why, then call the tools. After the results, say briefly what changed. The user watches these lines arrive in the chat, so they must read as a running commentary, not a report saved for the end.
 Read the timeline with list_timeline before you change anything, and again when you need ids.
 Prefer acting over asking. If the request is under-specified, choose a sensible, tasteful edit and say what you chose.
+Ask only when you are genuinely stuck or the request cannot be carried out without a decision only the user can make - for example a YouTube video that will not resolve, or an edit that needs footage you do not have. When you do ask, use ask_user, ask one clear question, and stop; do not keep calling tools in the same turn. Never ask about something you can decide yourself.
 Work in small steps: import media, place clips, then grade, effect, animate, caption. Several tool calls in one turn is normal.
 When the edit is complete, call finish with a short summary in the user's own language.
 Never invent media ids, clip ids or effect ids. Use ids from list_timeline, or resolve by name.
@@ -76,6 +78,9 @@ Times are seconds on the global timeline. A clip has start, duration, and in (of
 MEDIA
 You can import from any direct URL with import_media, including a YouTube watch URL.
 search_assets searches open libraries: YouTube, Wikimedia Commons (video and images), Openverse (music and images), Iconify (icons). Pass the returned url to import_media.
+The user can also browse YouTube directly in the media panel: kind=browse returns trending videos, and with a query it searches. Every result imports as a normal video clip.
+search_stock reads the Mixkit shelves - real footage overlays and backgrounds: fire, smoke, light leaks, particles, rain, snow, clouds, water, countdowns, green screen - and returns direct mp4 urls. Import one to lay it over the picture, or use it as a background.
+Choosing between them: search_stock for photographic overlays and backgrounds (fire, smoke, sparks, dust, flare, ink, splash); search_lottie for vector motion graphics (icons, arrows, confetti, lower thirds, animated titles). Do not use run_media_command to fake either one.
 run_media_command runs ffmpeg, ffprobe, ImageMagick and python3 on the media worker. Use it to synthesise test footage, tone, silence, countdowns, colour bars, a title card, a waveform image, or to probe a file. Anything you write in the working directory comes back as a playable url which you then import.
 Use run_media_command at most twice per request, and only when you actually need a new file or a probe you cannot get any other way. It is not a way to inspect audio you have already been given: the spectrogram is attached, so read it instead. If a command fails, read the log it returns, fix the cause or choose a different approach - never repeat the same command.
 
@@ -91,8 +96,11 @@ ${EFFECT_TEXT}
 ANIMATIONS
 Lottie overlays composite above the picture; they never move the clip underneath. Available seeds (add_animation with animationId after the library loads, or url):
 ${ANIMATION_TEXT}
+For anything not in that seed list, call search_lottie first. It searches the live LottieFiles catalogue - millions of animations, from a stock ticker to a glitch title to confetti. Take the url from a hit and pass it to add_animation; do not guess a lottiefiles url, because guessed urls 403.
 
 RULES THAT KEEP THE EDIT CORRECT
+Edit what you were given. If the user uploaded no video and no audio, do not invent a project out of library stock: either use exactly the media in the timeline, or ask what they want. Never claim you edited something you were not given.
+Decide the look once. Apply each effect or transition at most once per clip. If you dislike the result, change the values with update_clip, or remove it - do not apply and strip the same effect repeatedly, that wastes your steps and leaves the edit worse.
 An overlay, animation, text or effect sits on its own track above the video. Never move or retime the video to fit an overlay.
 Keep audio and video in step: if you speed a clip up, trim its duration to match, and keep the audio clip's in/start consistent with the video it belongs to.
 Captions: put them on a text track with set_captions, one entry per spoken line.
@@ -103,7 +111,7 @@ Use the tools. If you cannot, you may reply with a fenced json block containing 
 \`\`\`json
 [{"op":"add_clip","clip":{"kind":"video","mediaId":"media_abc","start":0,"duration":5}}]
 \`\`\`
-Never write both a tool call and a final answer in the same turn: call tools, wait for results, then answer.`;
+Write your one-line commentary as ordinary prose in the same message as the tool calls. Prose plus tool calls is the normal shape; only the final answer stands alone.`;
 }
 
 /** Build the user turn, mixing text, images, video stills and the analysis. */
@@ -268,8 +276,30 @@ async function runTool(call: ToolCall, ctx: AgentContext): Promise<{ ok: boolean
 
 const TOOL_RESULT_LIMIT = 6000;
 
+/**
+ * The media worker is a last resort, not the main tool. Left unbounded, a model
+ * that likes shell commands spends every round synthesising files and never
+ * gets to the edit, so the budget is enforced here rather than asked for in the
+ * prompt.
+ */
+const MAX_COMMANDS_PER_TURN = 4;
+
+/** True when two argument objects describe the same call. */
+function identical(a: unknown, b: unknown): boolean {
+  return a !== undefined && JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** Tools that only observe state, so repeating them is harmless and expected. */
-const READ_ONLY_TOOLS = new Set(["list_timeline", "list_effects", "list_animations", "search_assets"]);
+const READ_ONLY_TOOLS = new Set([
+  "list_timeline",
+  "list_effects",
+  "list_animations",
+  "search_assets",
+  "search_lottie",
+  "search_stock",
+]);
+/** Tools that end the turn: the model asks or reports, then waits for the user. */
+const TERMINAL_TOOLS = new Set(["finish", "ask_user"]);
 
 function trimPayload(payload: unknown): string {
   const text = JSON.stringify(payload ?? null);
@@ -306,6 +336,11 @@ export async function runAgent(options: RunOptions): Promise<{ summary: string; 
   /** results of calls already made this turn, keyed by tool name + arguments */
   const callCache = new Map<string, unknown>();
   const repeatCounts = new Map<string, number>();
+  /** last result and arguments per tool name, to catch a re-issued call after prose */
+  const recentCalls = new Map<string, unknown>();
+  const recentArgs = new Map<string, unknown>();
+  /** commands spent this turn, so a shell-happy model cannot burn the whole run */
+  let commandBudget = MAX_COMMANDS_PER_TURN;
 
   for (let round = 0; round < maxRounds; round++) {
     if (options.signal?.aborted) break;
@@ -382,19 +417,59 @@ export async function runAgent(options: RunOptions): Promise<{ summary: string; 
             instruction: "Do not repeat it. Use the result above, change the arguments, or call finish.",
           }),
         });
-        if (repeats >= 3 && call.function.name !== "finish") {
+        if (repeats >= 3 && !TERMINAL_TOOLS.has(call.function.name)) {
           push({ role: "user", content: "Stop repeating. Call finish now with what you have completed." });
         }
         continue;
       }
+      // The model likes to announce a command in prose and then re-issue the call it
+      // already made. Answer the announcement from the cache instead of running the
+      // command a second time.
+      if (!READ_ONLY_TOOLS.has(call.function.name)) {
+        const byName = recentCalls.get(call.function.name);
+        if (byName !== undefined && identical(recentArgs.get(call.function.name), args)) {
+          emit({ type: "tool", name: call.function.name, args, ok: true, result: byName });
+          push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify({ ok: true, note: "same call as the previous step; result reused", result: byName }),
+          });
+          continue;
+        }
+      }
+      if (call.function.name === "run_media_command") {
+        if (commandBudget <= 0) {
+          const refusal = {
+            error: "command budget for this request is spent",
+            instruction:
+              "Do not run more commands. Build the edit from the media already in the pool and from the shelves, then call finish.",
+          };
+          emit({ type: "tool", name: call.function.name, args, ok: false, error: refusal.error });
+          push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(refusal) });
+          continue;
+        }
+        commandBudget -= 1;
+      }
       const { ok, payload } = await runTool(call, options.ctx);
       callCache.set(fingerprint, payload);
+      if (!READ_ONLY_TOOLS.has(call.function.name)) {
+        recentCalls.set(call.function.name, payload);
+        recentArgs.set(call.function.name, args);
+      }
       emit({ type: "tool", name: call.function.name, args, ok, ...(ok ? { result: payload } : { error: String((payload as { error?: string }).error ?? "failed") }) });
       push({ role: "tool", tool_call_id: call.id, content: trimPayload(payload) });
       if (call.function.name === "finish") {
         finished = true;
         const record = payload as { summary?: string };
         summary = record.summary ?? summary;
+      }
+      if (call.function.name === "ask_user") {
+        // The model needs the user. Stop here rather than letting it burn the
+        // remaining rounds guessing at an answer it cannot know.
+        finished = true;
+        const record = payload as { asked?: string; options?: string[] };
+        const choices = record.options?.length ? `\n${record.options.map((o) => `• ${o}`).join("\n")}` : "";
+        summary = `${record.asked ?? "আমার একটা প্রশ্ন আছে।"}${choices}`;
       }
     }
     if (finished) break;
