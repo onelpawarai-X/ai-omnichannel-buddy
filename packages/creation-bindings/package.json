@@ -22,6 +22,6 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@openreel/core": "workspace:*"
+    "@openreel/core": "*"
   }
 }
