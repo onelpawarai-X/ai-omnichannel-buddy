@@ -1,5 +1,5 @@
+linkWorkspacePackages: true
 packages:
-  - "apps/*"
   - "packages/*"
 patchedDependencies:
   "@ffmpeg/core-mt@0.12.6": "patches/@ffmpeg__core-mt@0.12.6.patch"

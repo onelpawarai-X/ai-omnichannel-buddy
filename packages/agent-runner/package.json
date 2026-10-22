@@ -27,7 +27,7 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@openreel/agent": "workspace:*",
-    "@openreel/core": "workspace:*"
+    "@openreel/agent": "*",
+    "@openreel/core": "*"
   }
 }

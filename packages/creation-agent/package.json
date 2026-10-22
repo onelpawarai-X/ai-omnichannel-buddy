@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@openreel/creation-schema": "workspace:*"
+    "@openreel/creation-schema": "*"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
