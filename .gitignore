@@ -106,3 +106,10 @@ xcuserdata/
 .codex-audit/
 .codex/
 **/local.properties
+
+# Lovable / TanStack Start build output (restored root app)
+.output
+.vinxi
+.tanstack/**
+.nitro
+*.local
