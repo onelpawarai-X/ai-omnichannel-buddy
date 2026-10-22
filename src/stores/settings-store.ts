@@ -188,8 +188,6 @@ export const useSettingsStore = create<SettingsState>()(
           if (version < 3 && (!next.llmModel || next.llmModel === "gpt-4o")) {
             next.llmModel = "gpt-5.6-sol";
           }
-          if (version < 5) {
-          }
           const previousProvider = next.defaultLlmProvider;
           if (!isLlmProvider(previousProvider)) {
             next.defaultLlmProvider = null;

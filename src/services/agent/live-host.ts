@@ -281,7 +281,7 @@ export class LiveEditorHost implements EditingHost {
     options?: { name?: string },
   ): Promise<ImportedMediaRef> {
     this.requireOpenProject();
-    let body: BlobPart;
+    let body: Blob;
     let contentType = "";
     const bridge = window.openreel?.media?.fetchUrl;
     if (typeof bridge === "function") {
@@ -289,7 +289,7 @@ export class LiveEditorHost implements EditingHost {
       if (!res.ok) {
         throw new Error(res.error ?? `Download failed: HTTP ${res.status}`);
       }
-      body = res.body;
+      body = res.body as Blob;
       contentType = res.contentType;
     } else {
       // In the browser there is no main-process fetcher, so fetch the bytes
