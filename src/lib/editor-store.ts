@@ -101,7 +101,13 @@ type EditorState = {
   past: Snapshot[];
   // actions
   addMediaFromFile: (file: File) => Promise<MediaItem>;
-  addMediaFromUrl: (url: string, name?: string, source?: MediaItem["source"]) => Promise<MediaItem>;
+  addMediaFromUrl: (
+    url: string,
+    name?: string,
+    source?: MediaItem["source"],
+    forceKind?: MediaKind,
+    blob?: Blob,
+  ) => Promise<MediaItem>;
   addGeneratedImage: (dataUrl: string, name: string) => MediaItem;
   addTtsAudio: (text: string, opts?: { voice?: string; locale?: string }) => Promise<MediaItem>;
   transcribeMedia: (mediaId: string) => Promise<string>;
@@ -170,8 +176,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   addMediaFromUrl: async (url, name, source = "url", forceKind, blob) => {
     const id = uid("m");
-    const kind = forceKind ?? (/\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/i.test(url) ? "audio" : /\.(png|jpe?g|gif|webp|avif|svg)(\?|$)/i.test(url) ? "image" : "video");
-    const item: MediaItem = { id, name: name ?? url.split("/").pop()?.slice(0, 60) ?? "media", kind, url, duration: 0, source, blob };
+    const kind: MediaKind =
+      forceKind ??
+      (/\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/i.test(url)
+        ? "audio"
+        : /\.(png|jpe?g|gif|webp|avif|svg)(\?|$)/i.test(url)
+          ? "image"
+          : "video");
+    const item: MediaItem = {
+      id,
+      name: name ?? url.split("/").pop()?.slice(0, 60) ?? "media",
+      kind,
+      url,
+      duration: 0,
+      source,
+      blob,
+    };
     set((s) => ({ media: [...s.media, item] }));
     try {
       const probe = kind === "video" ? await probeVideo(url) : kind === "audio" ? await probeAudio(url) : await probeImage(url);
@@ -197,7 +217,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const blob = await ttsToBlob(text, opts ?? { voice: get().ttsVoice });
     const url = URL.createObjectURL(blob);
     const id = uid("m");
-    const item: MediaItem = { id, name: `voice: ${text.slice(0, 24)}`, kind: "audio", url, duration: 0, source: "tts", blob };
+    const item: MediaItem = {
+      id,
+      name: `voice: ${text.slice(0, 24)}`,
+      kind: "audio",
+      url,
+      duration: 0,
+      source: "tts",
+      blob,
+    };
     set((s) => ({ media: [...s.media, item] }));
     const probe = await probeAudio(url);
     const updated = { ...item, ...probe };
@@ -300,8 +328,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       start: time,
       duration: rightDur,
       in: clip.in + leftDur * clip.speed,
-      text: clip.text ? { ...clip.text } : undefined,
       filter: { ...clip.filter },
+      ...(clip.text ? { text: { ...clip.text } } : {}),
     };
     set((s) => ({
       clips: [...s.clips.map((c) => (c.id === clipId ? { ...c, duration: leftDur } : c)), right],
@@ -333,7 +361,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
   setAgentBusy: (busy) => set({ agentBusy: busy }),
   pushUndo: () =>
-    set((s) => ({ past: [...s.past.slice(-49), { clips: s.clips.map((c) => ({ ...c, filter: { ...c.filter } })) }] })),
+    set((s) => ({
+      past: [...s.past.slice(-49), { clips: s.clips.map((c) => ({ ...c, filter: { ...c.filter } })) }],
+    })),
   undo: () =>
     set((s) => {
       const last = s.past[s.past.length - 1];
@@ -345,25 +375,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clipAtPlayhead: (kind) => {
     const t = get().playhead;
     return get()
-      .clips.filter((c) => (kind ? c.kind === kind : c.kind !== "audio" && c.kind !== "text") && t >= c.start && t < c.start + c.duration)
+      .clips.filter(
+        (c) => (kind ? c.kind === kind : c.kind !== "audio" && c.kind !== "text") && t >= c.start && t < c.start + c.duration,
+      )
       .sort((a, b) => a.start - b.start)
       .pop();
   },
 
   // ---- Agent op executor -------------------------------------------------
-  applyOp: async (op) => {
+  applyOp: async (rawOp) => {
     const state = get();
-    const arg = <T,>(key: string, fallback?: T): T => (op[key] === undefined ? (fallback as T) : (op[key] as T));
+    const op = rawOp as { [key: string]: unknown };
+    const arg = <T,>(key: string): T | undefined => (op[key] === undefined ? undefined : (op[key] as T));
+    const num = (key: string): number | undefined => {
+      const v = arg<unknown>(key);
+      return v === undefined ? undefined : Number(v);
+    };
+    const str = (key: string): string | undefined => {
+      const v = arg<unknown>(key);
+      return v === undefined ? undefined : String(v);
+    };
     const resolveClip = (): Clip | undefined => {
-      const id = op.clipId as string | undefined;
+      const id = str("clipId");
       if (id) return state.clips.find((c) => c.id === id);
       if (state.selectedClipId) return state.clips.find((c) => c.id === state.selectedClipId);
       return state.clipAtPlayhead();
     };
 
-    switch (op.op) {
+    switch (str("op") ?? "") {
       case "seek": {
-        const t = Number(op.time ?? 0);
+        const t = num("time") ?? 0;
         get().seek(t);
         return `Playhead moved to ${t.toFixed(2)}s`;
       }
@@ -374,8 +415,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         get().setPlaying(false);
         return "Paused";
       case "split_clip": {
-        const at = op.at !== undefined ? Number(op.at) : get().playhead;
-        const clip = op.clipId ? state.clips.find((c) => c.id === op.clipId) : get().clipAtPlayhead();
+        const at = num("at") ?? get().playhead;
+        const clip = str("clipId") ? state.clips.find((c) => c.id === str("clipId")) : get().clipAtPlayhead();
         if (!clip) return "ERROR: no clip at that time";
         const ok = get().splitClipAt(clip.id, at);
         return ok ? `Split "${clip.label}" at ${at.toFixed(2)}s` : "ERROR: split point too close to clip edge";
@@ -383,8 +424,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       case "trim_clip": {
         const clip = resolveClip();
         if (!clip) return "ERROR: no clip found";
-        const inV = op.in !== undefined ? Number(op.in) : clip.in;
-        const dur = op.duration !== undefined ? Number(op.duration) : clip.duration;
+        const inV = num("in") ?? clip.in;
+        const dur = num("duration") ?? clip.duration;
         get().pushUndo();
         get().updateClip(clip.id, { in: Math.max(0, inV), duration: Math.max(0.1, dur) });
         return `Trimmed "${clip.label}" (in=${inV.toFixed(2)}s, duration=${dur.toFixed(2)}s)`;
@@ -392,7 +433,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       case "move_clip": {
         const clip = resolveClip();
         if (!clip) return "ERROR: no clip found";
-        const start = Math.max(0, Number(op.start));
+        const start = Math.max(0, num("start") ?? clip.start);
         get().pushUndo();
         get().updateClip(clip.id, { start });
         return `"${clip.label}" moved to ${start.toFixed(2)}s`;
@@ -407,14 +448,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const clip = resolveClip();
         if (!clip) return "ERROR: no clip found";
         get().pushUndo();
-        const copy: Clip = { ...clip, id: uid("c"), start: clip.start + clip.duration, filter: { ...clip.filter }, text: clip.text ? { ...clip.text } : undefined };
+        const copy: Clip = {
+          ...clip,
+          id: uid("c"),
+          start: clip.start + clip.duration,
+          filter: { ...clip.filter },
+          ...(clip.text ? { text: { ...clip.text } } : {}),
+        };
         set((s) => ({ clips: [...s.clips, copy] }));
         return `Duplicated "${clip.label}"`;
       }
       case "set_speed": {
         const clip = resolveClip();
         if (!clip) return "ERROR: no clip found";
-        const speed = Math.min(4, Math.max(0.25, Number(op.speed ?? 1)));
+        const speed = Math.min(4, Math.max(0.25, num("speed") ?? 1));
         const oldDur = clip.duration;
         get().pushUndo();
         get().updateClip(clip.id, { speed, duration: (oldDur * clip.speed) / speed });
@@ -423,10 +470,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       case "set_volume": {
         const clip = resolveClip();
         if (!clip) return "ERROR: no clip found";
-        const volume = Math.min(1, Math.max(0, Number(op.volume ?? 1)));
+        const volume = Math.min(1, Math.max(0, num("volume") ?? 1));
+        const mute = arg<boolean>("mute") === true;
         get().pushUndo();
-        get().updateClip(clip.id, { volume, muted: op.mute === true ? true : false });
-        return `"${clip.label}" volume ${op.mute === true ? "muted" : `set to ${Math.round(volume * 100)}%`}`;
+        get().updateClip(clip.id, { volume, muted: mute });
+        return `"${clip.label}" volume ${mute ? "muted" : `set to ${Math.round(volume * 100)}%`}`;
       }
       case "set_filter": {
         const clip = resolveClip();
@@ -441,48 +489,55 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           dreamy: { blur: 1.5, brightness: 110, saturate: 115 },
           bw_contrast: { grayscale: 100, contrast: 130 },
         };
-        const preset = typeof op.preset === "string" ? presets[op.preset] : undefined;
-        const patch = (op.filter ?? {}) as Partial<VideoFilter>;
+        const presetName = str("preset");
+        const preset = presetName ? presets[presetName] : undefined;
+        const patch = (arg<Partial<VideoFilter>>("filter") ?? {}) as Partial<VideoFilter>;
         get().pushUndo();
         get().updateClip(clip.id, { filter: { ...clip.filter, ...(preset ?? patch) } });
         return `Filter applied to "${clip.label}"`;
       }
       case "add_text": {
-        const clip = get().addTextClip({
-          content: String(op.content ?? "Text"),
-          start: op.start !== undefined ? Number(op.start) : get().playhead,
-          duration: op.duration !== undefined ? Number(op.duration) : 3,
-          x: op.x !== undefined ? Number(op.x) : undefined,
-          y: op.y !== undefined ? Number(op.y) : undefined,
-          size: op.size !== undefined ? Number(op.size) : undefined,
-          color: typeof op.color === "string" ? op.color : undefined,
-          weight: op.weight !== undefined ? Number(op.weight) : undefined,
-        });
+        const textProps: Partial<TextProps> & { start?: number; duration?: number } = {};
+        if (str("content") !== undefined) textProps.content = str("content");
+        if (num("start") !== undefined) textProps.start = num("start");
+        if (num("duration") !== undefined) textProps.duration = num("duration");
+        if (num("x") !== undefined) textProps.x = num("x");
+        if (num("y") !== undefined) textProps.y = num("y");
+        if (num("size") !== undefined) textProps.size = num("size");
+        if (str("color") !== undefined) textProps.color = str("color");
+        if (num("weight") !== undefined) textProps.weight = num("weight");
+        const clip = get().addTextClip(textProps);
         return `Text added: "${clip.text?.content}" at ${clip.start.toFixed(2)}s for ${clip.duration.toFixed(1)}s`;
       }
       case "update_text": {
         const clip = resolveClip();
         if (!clip || !clip.text) return "ERROR: no text clip found";
         const t = { ...clip.text };
-        if (op.content !== undefined) t.content = String(op.content);
-        if (op.x !== undefined) t.x = Math.min(1, Math.max(0, Number(op.x)));
-        if (op.y !== undefined) t.y = Math.min(1, Math.max(0, Number(op.y)));
-        if (op.size !== undefined) t.size = Math.max(8, Number(op.size));
-        if (typeof op.color === "string") t.color = op.color;
-        if (op.weight !== undefined) t.weight = Number(op.weight);
+        if (str("content") !== undefined) t.content = str("content");
+        if (num("x") !== undefined) t.x = Math.min(1, Math.max(0, num("x")));
+        if (num("y") !== undefined) t.y = Math.min(1, Math.max(0, num("y")));
+        if (num("size") !== undefined) t.size = Math.max(8, num("size"));
+        if (str("color") !== undefined) t.color = str("color");
+        if (num("weight") !== undefined) t.weight = num("weight");
         get().pushUndo();
         get().updateClip(clip.id, { text: t, label: t.content.slice(0, 24) });
         return `Text updated: "${t.content}"`;
       }
       case "add_media": {
-        const url = String(op.url ?? "");
+        const url = str("url") ?? "";
         if (!/^https?:\/\//i.test(url)) return "ERROR: url must be http(s)";
-        const item = await get().addMediaFromUrl(`/api/public/fetch-media?url=${encodeURIComponent(url)}`, op.name as string | undefined, "url");
-        const clip = get().addClipForMedia(item.id, op.start !== undefined ? Number(op.start) : undefined);
-        return clip ? `Media added and placed at ${clip.start.toFixed(2)}s (${item.kind}, ${item.duration.toFixed(1)}s)` : "ERROR: could not place media";
+        const item = await get().addMediaFromUrl(
+          `/api/public/fetch-media?url=${encodeURIComponent(url)}`,
+          str("name"),
+          "url",
+        );
+        const clip = get().addClipForMedia(item.id, num("start"));
+        return clip
+          ? `Media added and placed at ${clip.start.toFixed(2)}s (${item.kind}, ${item.duration.toFixed(1)}s)`
+          : "ERROR: could not place media";
       }
       case "generate_image": {
-        const prompt = String(op.prompt ?? "").slice(0, 1000);
+        const prompt = (str("prompt") ?? "").slice(0, 1000);
         if (!prompt) return "ERROR: prompt required";
         const { streamImage } = await import("./stream-image");
         let final = "";
@@ -491,17 +546,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         });
         if (!final) return "ERROR: image generation returned nothing";
         const item = get().addGeneratedImage(final, `gen: ${prompt.slice(0, 24)}`);
-        const clip = get().addClipForMedia(item.id, op.start !== undefined ? Number(op.start) : undefined);
-        const dur = op.duration !== undefined ? Number(op.duration) : undefined;
-        if (clip && dur) get().updateClip(clip.id, { duration: Math.max(0.5, dur) });
+        const clip = get().addClipForMedia(item.id, num("start"));
+        const dur = num("duration");
+        if (clip && dur !== undefined) get().updateClip(clip.id, { duration: Math.max(0.5, dur) });
         return `Image generated from prompt and placed at ${clip?.start.toFixed(2) ?? "0"}s`;
       }
       case "tts": {
-        const text = String(op.text ?? "").slice(0, 5000);
+        const text = (str("text") ?? "").slice(0, 5000);
         if (!text) return "ERROR: text required";
-        const item = await get().addTtsAudio(text, { voice: typeof op.voice === "string" ? op.voice : undefined, locale: typeof op.locale === "string" ? op.locale : undefined });
-        const clip = get().addClipForMedia(item.id, op.start !== undefined ? Number(op.start) : undefined);
-        return clip ? `Voiceover added at ${clip.start.toFixed(2)}s (${item.duration.toFixed(1)}s): "${text.slice(0, 40)}"` : "ERROR: could not place voiceover";
+        const item = await get().addTtsAudio(text, {
+          voice: str("voice"),
+          locale: str("locale"),
+        });
+        const clip = get().addClipForMedia(item.id, num("start"));
+        return clip
+          ? `Voiceover added at ${clip.start.toFixed(2)}s (${item.duration.toFixed(1)}s): "${text.slice(0, 40)}"`
+          : "ERROR: could not place voiceover";
       }
       case "transcribe": {
         const clip = resolveClip();
@@ -511,14 +571,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
       case "list_state": {
         const s = get();
-        return JSON.stringify({ playhead: Number(s.playhead.toFixed(2)), duration: Number(timelineEnd(s.clips).toFixed(2)), clips: s.clips.map((c) => ({ id: c.id, kind: c.kind, label: c.label.slice(0, 24), start: Number(c.start.toFixed(2)), duration: Number(c.duration.toFixed(2)) })) });
+        return JSON.stringify({
+          playhead: Number(s.playhead.toFixed(2)),
+          duration: Number(timelineEnd(s.clips).toFixed(2)),
+          clips: s.clips.map((c) => ({
+            id: c.id,
+            kind: c.kind,
+            label: c.label.slice(0, 24),
+            start: Number(c.start.toFixed(2)),
+            duration: Number(c.duration.toFixed(2)),
+          })),
+        });
       }
       default:
-        return `ERROR: unknown op "${op.op}"`;
+        return `ERROR: unknown op "${str("op") ?? ""}"`;
     }
   },
 }));
-
-export function filterToCss(f: VideoFilter): string {
-  return filterCss(f);
-}
