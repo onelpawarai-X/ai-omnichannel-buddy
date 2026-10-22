@@ -78,7 +78,14 @@ export async function probeVideo(url: string): Promise<ProbeResult> {
     frames.push(await captureFrame(video, t, 224));
   }
   video.src = "";
-  return { duration, width: video.videoWidth, height: video.videoHeight, thumb, frames };
+  const result: ProbeResult = {
+    duration,
+    width: video.videoWidth,
+    height: video.videoHeight,
+    frames,
+  };
+  if (thumb) result.thumb = thumb;
+  return result;
 }
 
 /** Probe an image: natural size; default 4s timeline duration. */
@@ -98,7 +105,13 @@ export async function probeImage(url: string): Promise<ProbeResult> {
       } catch {
         thumb = undefined;
       }
-      resolve({ duration: 4, width: img.naturalWidth, height: img.naturalHeight, thumb });
+      const result: ProbeResult = {
+        duration: 4,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+      if (thumb) result.thumb = thumb;
+      resolve(result);
     };
     img.onerror = () => reject(new Error("Image failed to load"));
     img.src = url;
