@@ -31,6 +31,7 @@ export default defineConfig({
       "src/**/*.spec.ts",
       "src/**/*.spec.tsx",
       "vite-plugins/**/*.test.ts",
+      "functions/**/*.test.ts",
     ],
     setupFiles: ["./src/test/setup.ts"],
     coverage: {

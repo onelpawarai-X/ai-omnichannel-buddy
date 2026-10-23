@@ -44,8 +44,43 @@ export interface AIProviderPreset {
 }
 
 /** The one public gateway. */
-export const ZYRAXON_BASE_URL =
+export const ZYRAXON_UPSTREAM_URL =
   "https://zyraxonai.lovable.app/api/public/zyraxon/v1";
+
+/**
+ * Requests go to our own origin and are forwarded to the gateway by the
+ * `/api/zyraxon` route (a Pages Function in production, a Vite middleware in
+ * dev). Posting to the gateway directly is blocked by the browser as soon as
+ * the body carries `tools`, which is why every edit failed while plain chat
+ * worked. A relative path keeps the call same-origin everywhere.
+ */
+export const ZYRAXON_BASE_URL = "/api/zyraxon/v1";
+
+/** Origin of the public gateway, used when no page origin exists. */
+export const ZYRAXON_UPSTREAM_ORIGIN = "https://zyraxonai.lovable.app";
+
+const hasPageOrigin = (): boolean =>
+  typeof window !== "undefined" && typeof window.location?.origin === "string";
+
+/**
+ * Absolute URL for a gateway suffix.
+ *
+ * In a browser the relative proxy path is used, because the browser must not
+ * cross origins to reach the gateway. Node has no page origin and a relative
+ * URL is invalid there, so it calls the gateway host directly.
+ */
+export function zyraxonEndpoint(suffix: string): string {
+  return hasPageOrigin()
+    ? `${ZYRAXON_BASE_URL}${suffix}`
+    : `${ZYRAXON_UPSTREAM_URL}${suffix}`;
+}
+
+/** Same rule for the speech routes, which sit outside the `/v1` prefix. */
+export function zyraxonSpeechEndpoint(suffix: string): string {
+  return hasPageOrigin()
+    ? `/api/zyraxon${suffix}`
+    : `${ZYRAXON_UPSTREAM_ORIGIN}/api/public${suffix}`;
+}
 
 const text = ["text"] as const;
 const textImage = ["text", "image"] as const;

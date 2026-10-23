@@ -3,6 +3,7 @@ import { runTurn } from "@openreel/agent";
 import { useProjectStore } from "../../stores/project-store";
 import { LiveEditorHost } from "./live-host";
 import { makeZyraxonClient } from "./zyraxon-transport";
+import { ZYRAXON_UPSTREAM_URL } from "../../stores/ai-provider-catalog";
 import {
   EDITING_SYSTEM,
   editingToolDefs,
@@ -32,7 +33,8 @@ live("ZYRAXON live end-to-end", () => {
   it("answers in Bengali and really edits the timeline through tool calls", async () => {
     useProjectStore.getState().createNewProject();
     const host = new LiveEditorHost();
-    const llm = makeZyraxonClient({ model: "zyraxon-apex" });
+    // Node harness: no page origin, so call the gateway host directly.
+    const llm = makeZyraxonClient({ model: "zyraxon-apex", baseUrl: ZYRAXON_UPSTREAM_URL });
 
     const result = await runTurn({
       host,

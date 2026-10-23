@@ -31,7 +31,7 @@ describe("ZYRAXON transport", () => {
     globalThis.fetch = realFetch;
   });
 
-  it("posts the OpenAI wire format to the one permanent gateway, keyless", async () => {
+  it("posts the OpenAI wire format to the same-origin gateway route, keyless", async () => {
     const fetchMock = installFetch(async () => jsonResponse(reply("ঠিক আছে")));
     const client = makeZyraxonClient({ model: "zyraxon-apex" });
 
@@ -51,8 +51,10 @@ describe("ZYRAXON transport", () => {
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe("zyraxon-apex");
     expect(body.messages.at(-1)).toEqual({ role: "user", content: "হ্যালো" });
-    // Keyless: a placeholder stands in, but the wire format is OpenAI's.
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer zyraxon");
+    // Same-origin relative path: the browser must not cross origins, and no
+    // credential is sent because the gateway is public.
+    expect(url.startsWith("/api/zyraxon/")).toBe(true);
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
   });
 
   it("surfaces a tool call as a tool use the loop can act on", async () => {
@@ -103,7 +105,7 @@ describe("ZYRAXON transport", () => {
 
     await expect(
       client.complete({ messages: [{ role: "user", content: "hi" }], tools: [] }),
-    ).rejects.toThrow(/Could not reach the ZYRAXON gateway/);
+    ).rejects.toThrow(/যোগাযোগ করা যায়নি/);
   });
 
   it("rejects a non-JSON or shapeless reply instead of pretending it worked", async () => {

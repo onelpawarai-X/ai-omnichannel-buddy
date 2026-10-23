@@ -4,6 +4,7 @@ import path from "path";
 import { stripFfmpegPlugin } from "./vite-plugins/strip-ffmpeg";
 import { pruneFontsPlugin } from "./vite-plugins/prune-fonts";
 import { stockRoutesPlugin } from "./vite-plugins/stock-routes";
+import { zyraxonRoutesPlugin } from "./vite-plugins/zyraxon-routes";
 
 const isDesktop = process.env.OPENREEL_DESKTOP === "1";
 
@@ -31,7 +32,7 @@ function desktopHtmlPlugin() {
 
 export default defineConfig({
   base: isDesktop ? "./" : "/",
-  plugins: [react(), desktopHtmlPlugin(), stripFfmpegPlugin(isDesktop), pruneFontsPlugin(isDesktop), stockRoutesPlugin()],
+  plugins: [react(), desktopHtmlPlugin(), stripFfmpegPlugin(isDesktop), pruneFontsPlugin(isDesktop), stockRoutesPlugin(), zyraxonRoutesPlugin()],
   assetsInclude: ["**/*.wasm"],
   resolve: {
     dedupe: ["react", "react-dom"],

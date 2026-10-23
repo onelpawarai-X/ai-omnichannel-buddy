@@ -10,13 +10,16 @@
  * containers a browser recording produces. Text-to-speech does go through the
  * gateway, since it returns a plain audio/mpeg stream.
  */
-import { ZYRAXON_BASE_URL } from "../stores/ai-provider-catalog";
+import { zyraxonEndpoint, zyraxonSpeechEndpoint } from "../stores/ai-provider-catalog";
 
-/** Speech lives beside the model API, not under the `/v1` prefix. */
-export const ZYRAXON_ORIGIN = "https://zyraxonai.lovable.app";
+/**
+ * Speech lives beside the model API, not under the `/v1` prefix. It goes
+ * through the same same-origin route as chat, so the browser never has to
+ * cross origins for the gateway.
+ */
 export const ZYRAXON_SPEECH = {
-  tts: `${ZYRAXON_ORIGIN}/api/public/tts`,
-  voices: `${ZYRAXON_ORIGIN}/api/public/tts/voices`,
+  tts: "/tts",
+  voices: "/tts/voices",
 } as const;
 
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -93,7 +96,7 @@ export interface ZyraxonModelRecord {
  * catalogue is only a fallback for an offline first paint.
  */
 export async function listModels(signal?: AbortSignal): Promise<ZyraxonModelRecord[]> {
-  const response = await zyraxonFetch(`${ZYRAXON_BASE_URL}/models`, { method: "GET" }, signal);
+  const response = await zyraxonFetch(zyraxonEndpoint("/models"), { method: "GET" }, signal);
   const payload = (await response.json()) as {
     data?: Array<Record<string, unknown>>;
   };
@@ -129,7 +132,7 @@ export async function providerStatus(
   signal?: AbortSignal,
 ): Promise<ZyraxonProviderStatus> {
   const response = await zyraxonFetch(
-    `${ZYRAXON_BASE_URL}/provider`,
+    zyraxonEndpoint("/provider"),
     { method: "GET" },
     signal,
   );
@@ -157,7 +160,7 @@ export async function listVoices(signal?: AbortSignal): Promise<{
   languages: string[];
   locales: string[];
 }> {
-  const response = await zyraxonFetch(ZYRAXON_SPEECH.voices, { method: "GET" }, signal);
+  const response = await zyraxonFetch(zyraxonSpeechEndpoint(ZYRAXON_SPEECH.voices), { method: "GET" }, signal);
   const payload = (await response.json()) as VoicesPayload;
   const voices = (payload.data ?? [])
     .map((entry) => ({
@@ -187,7 +190,7 @@ export async function speak(
   const trimmed = text.trim();
   if (!trimmed) throw new ZyraxonError("There is no text to speak.");
   const response = await zyraxonFetch(
-    ZYRAXON_SPEECH.tts,
+    zyraxonSpeechEndpoint(ZYRAXON_SPEECH.tts),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
