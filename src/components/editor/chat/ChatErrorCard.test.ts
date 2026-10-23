@@ -2,39 +2,39 @@ import { describe, expect, it } from "vitest";
 import { formatChatError } from "./ChatErrorCard";
 
 describe("formatChatError", () => {
-  it("extracts a useful provider message from a raw JSON error", () => {
+  it("surfaces the gateway's own message when it rejects a request", () => {
     expect(
-      formatChatError(
-        'openai-compatible 401: {"error":{"message":"The API key is invalid"}}',
-      ),
+      formatChatError('ZYRAXON returned HTTP 401: {"error":"model not allowed"}'),
     ).toMatchObject({
-      title: "Authentication failed",
-      message: "The API key is invalid",
+      title: "গেটওয়ে অনুরোধটি গ্রহণ করেনি",
       action: "ai-editor",
     });
   });
 
-  it("turns network and CORS failures into endpoint guidance", () => {
-    expect(
-      formatChatError(
-        "Could not reach the compatible endpoint. Check browser CORS settings.",
-      ),
-    ).toMatchObject({
-      title: "Couldn’t reach the endpoint",
-      action: "ai-editor",
+  it("turns a network failure into connection guidance, not endpoint advice", () => {
+    expect(formatChatError("গেটওয়ের সাথে যোগাযোগ করা যায়নি।")).toMatchObject({
+      title: "গেটওয়ের সাথে যোগাযোগ করা যায়নি",
+      action: null,
     });
   });
 
   it("offers a new chat when the context window is exhausted", () => {
     expect(formatChatError("maximum context length exceeded")).toMatchObject({
-      title: "Conversation is too long",
+      title: "আলাপ অনেক লম্বা হয়ে গেছে",
       action: "new-chat",
+    });
+  });
+
+  it("points at the model picker when the model is unknown", () => {
+    expect(formatChatError("model zyraxon-nope not found")).toMatchObject({
+      title: "মডেল বা রুট পাওয়া যায়নি",
+      actionLabel: "মডেল বাছুন",
     });
   });
 
   it("keeps an unknown error readable", () => {
     expect(formatChatError("provider unavailable")).toEqual({
-      title: "AI request failed",
+      title: "এআই অনুরোধ ব্যর্থ হয়েছে",
       message: "provider unavailable",
       action: null,
       details: undefined,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ToolcraftButton as Button } from "@openreel/ui";
 import {
   ZYRAXON_MODELS,
-  ZYRAXON_BASE_URL,
+  ZYRAXON_UPSTREAM_URL,
   pickDefaultModel,
   type AIModelOption,
 } from "../../../stores/ai-provider-catalog";
@@ -78,7 +78,7 @@ export function AIConnectionPanel({ disabled = false }: { disabled?: boolean }) 
         <p className="mt-0.5">
           The gateway is built in and always on. You choose the model; nothing else needs configuring.
         </p>
-        <p className="mt-0.5 font-mono text-[10px] break-all text-fg-muted">{ZYRAXON_BASE_URL}</p>
+        <p className="mt-0.5 font-mono text-[10px] break-all text-fg-muted">{ZYRAXON_UPSTREAM_URL}</p>
       </div>
 
       <div>

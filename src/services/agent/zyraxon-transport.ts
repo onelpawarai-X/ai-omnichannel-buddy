@@ -1,10 +1,11 @@
 /**
  * The LLM client the editing agent talks to.
  *
- * ZYRAXON is the only provider, it is keyless, and its host sends permissive
- * CORS, so the browser posts straight to `/chat/completions`. There is no
- * adapter choice, no key, and no same-origin proxy in the path — the endpoint
- * is a permanent constant, which is why nothing here reads user settings.
+ * ZYRAXON is the only provider and it is keyless, so there is no adapter
+ * choice and nothing here reads user settings. The request goes to the
+ * same-origin `/api/zyraxon` route rather than to the gateway host: a direct
+ * cross-origin post is blocked by the browser as soon as the body carries
+ * `tools`, so plain chat appeared to work while every edit failed.
  */
 import {
   makeClientFromSend,
@@ -13,20 +14,24 @@ import {
   parseRetryAfterMs,
   type LLMClient,
 } from "@openreel/agent";
-import { ZYRAXON_BASE_URL } from "../../stores/ai-provider-catalog";
-
-/** Any non-empty string satisfies a client that insists on a key. */
-const KEYLESS_PLACEHOLDER = "zyraxon";
+import { zyraxonEndpoint } from "../../stores/ai-provider-catalog";
 
 export interface ZyraxonClientOptions {
   readonly model: string;
   readonly signal?: AbortSignal;
   /** Ceiling for one completion. The turn loop also enforces a step budget. */
   readonly maxTokens?: number;
+  /**
+   * Absolute base URL for the gateway. Defaults to the same-origin proxy path,
+   * which is what the browser needs. A Node harness has no page origin to
+   * resolve that path against, so it passes the gateway host explicitly.
+   */
+  readonly baseUrl?: string;
 }
 
 export function makeZyraxonClient(options: ZyraxonClientOptions): LLMClient {
   const model = options.model.trim();
+  const baseUrl = options.baseUrl ?? zyraxonEndpoint("");
   if (!model) throw new Error("Pick a ZYRAXON model in the chat box.");
 
   const send = withRetry(
@@ -34,21 +39,19 @@ export function makeZyraxonClient(options: ZyraxonClientOptions): LLMClient {
       options.signal?.throwIfAborted();
       let response: Response;
       try {
-        response = await fetch(`${ZYRAXON_BASE_URL}/chat/completions`, {
+        response = await fetch(`${baseUrl}/chat/completions`, {
           method: "POST",
           redirect: "error",
           credentials: "omit",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${KEYLESS_PLACEHOLDER}`,
-          },
+          // Only a simple header, so the call needs no CORS preflight.
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
           signal: options.signal,
         });
       } catch (error) {
         if (options.signal?.aborted) throw error;
         throw new Error(
-          "Could not reach the ZYRAXON gateway. Check the network connection.",
+          "গেটওয়ের সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করুন।",
         );
       }
       // Never surface the upstream body: a gateway may echo the request back.

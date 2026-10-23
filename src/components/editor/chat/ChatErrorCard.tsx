@@ -49,38 +49,37 @@ export function formatChatError(rawError: string): ChatErrorPresentation {
     )
   ) {
     return {
-      title: "Authentication failed",
+      title: "গেটওয়ে অনুরোধটি গ্রহণ করেনি",
       message:
         upstream ??
-        "The endpoint rejected the API key. Check the session key and try again.",
+        "চ্যাট বক্স থেকে অন্য মডেল বেছে নিয়ে আবার চেষ্টা করুন।",
       action: "ai-editor",
-      actionLabel: "Check API key",
+      actionLabel: "মডেল বাছুন",
       details,
     };
   }
 
   if (status === 429 || /rate limit|too many requests|quota/.test(searchable)) {
     return {
-      title: "Rate limit reached",
+      title: "অনুরোধের সীমা শেষ",
       message:
         upstream ??
-        "The endpoint is receiving too many requests. Wait a moment and try again.",
+        "গেটওয়েতে এখন অনেক অনুরোধ যাচ্ছে। একটু পরে আবার চেষ্টা করুন।",
       action: null,
       details,
     };
   }
 
   if (
-    /cors|failed to fetch|network error|could not reach|connection refused|load failed/.test(
+    /cors|failed to fetch|network error|could not reach|যোগাযোগ করা যায়নি|connection refused|load failed/.test(
       searchable,
     )
   ) {
     return {
-      title: "Couldn’t reach the endpoint",
+      title: "গেটওয়ের সাথে যোগাযোগ করা যায়নি",
       message:
-        "Check the host URL and confirm the endpoint is online. In a browser, the host must also allow CORS requests from OpenReel.",
-      action: "ai-editor",
-      actionLabel: "Check endpoint",
+        "ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন। সম্পাদনার অনুরোধ আমাদের নিজের সার্ভার হয়ে গেটওয়েতে যায়, তাই এটি সাধারণত সংযোগের সমস্যা।",
+      action: null,
       details: raw,
     };
   }
@@ -91,24 +90,22 @@ export function formatChatError(rawError: string): ChatErrorPresentation {
     )
   ) {
     return {
-      title: "Conversation is too long",
+      title: "আলাপ অনেক লম্বা হয়ে গেছে",
       message:
         upstream ??
-        "This model cannot fit the full conversation. Start a new chat and continue there.",
+        "এই মডেলটি পুরো আলাপ ধরতে পারছে না। নতুন চ্যাট শুরু করে সেখানে চালিয়ে যান।",
       action: "new-chat",
-      actionLabel: "Start new chat",
+      actionLabel: "নতুন চ্যাট",
       details,
     };
   }
 
   if (status === 404 || /model.+not found|unknown model|does not exist/.test(searchable)) {
     return {
-      title: "Model or route not found",
-      message:
-        upstream ??
-        "Check that the base URL and model ID match what the endpoint exposes.",
+      title: "মডেল বা রুট পাওয়া যায়নি",
+      message: upstream ?? "চ্যাট বক্স থেকে অন্য মডেল বেছে নিন।",
       action: "ai-editor",
-      actionLabel: "Check endpoint",
+      actionLabel: "মডেল বাছুন",
       details,
     };
   }
@@ -118,18 +115,17 @@ export function formatChatError(rawError: string): ChatErrorPresentation {
       searchable,
     )
   ) {
-    const keyIssue = /secure storage|unlock|api key/.test(searchable);
     return {
-      title: "AI setup needed",
+      title: "মডেল বাছাই দরকার",
       message: upstream ?? raw,
       action: "ai-editor",
-      actionLabel: keyIssue ? "Check API key" : "Open AI settings",
+      actionLabel: "মডেল বাছুন",
       details,
     };
   }
 
   return {
-    title: "AI request failed",
+    title: "এআই অনুরোধ ব্যর্থ হয়েছে",
     message: upstream ?? raw,
     action: null,
     details,
