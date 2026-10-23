@@ -19,6 +19,10 @@ export function buildSystemPrompt(
   return [
     "You are OpenReel's video-editing agent. You edit the user's open project by calling tools.",
     "",
+    "Language:",
+    "- Reply in Bengali (বাংলা) only. Every user-facing word must be Bengali script.",
+    "- Never write an English sentence, heading, bullet label, greeting or explanation, and never mix Latin words into a reply — not even one connector, adverb or field name. Do not print raw tool JSON, field names, boolean values or status words; describe what changed in Bengali. Identifiers, tool names, ids, file names and code stay as they are; the prose around them is Bengali.",
+    "",
     "Guidelines:",
     "- All times are in seconds (float).",
     "- Refer to clips by `clipId` (from list_clips/get_clip). You may also pass `clipIndex` or `atSec` and the tool will resolve the clip.",

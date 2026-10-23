@@ -1,28 +1,41 @@
 import type { JSX } from "react";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check, Settings, RefreshCw } from "@/icons/lucide-compat";
+import { ChevronDown, Check, RefreshCw, Star } from "@/icons/lucide-compat";
 import {
-  AI_PROVIDER_PRESETS,
-  modelsForProvider,
-  providerPreset,
+  ZYRAXON_MODELS,
+  pickDefaultModel,
   type AIModelOption,
-  type AIProviderId,
 } from "../../../stores/ai-provider-catalog";
 import { useAIConnectionStore } from "../../../stores/ai-connection-store";
-import { useSettingsStore } from "../../../stores/settings-store";
-import { discoverCompatibleModels } from "../../../services/agent/model-discovery";
+import { listModels, type ZyraxonModelRecord } from "../../../services/zyraxon";
+
+/** Fold a live gateway record into the shape the picker renders. */
+function fromGateway(record: ZyraxonModelRecord): AIModelOption {
+  return {
+    id: record.id,
+    label: record.displayName || record.id,
+    description: record.description,
+    contextWindow: record.contextWindow,
+    maxOutputTokens: record.maxOutputTokens,
+    inputModalities: record.inputModalities as AIModelOption["inputModalities"],
+    routedModalities: record.routedModalities as AIModelOption["routedModalities"],
+  };
+}
 
 /**
- * Compact provider + model picker for the chat header, so the model can be
- * switched without leaving the conversation. Full configuration (keys, custom
- * URLs) stays in Settings → AI Editor.
+ * Compact model picker for the chat header.
+ *
+ * ZYRAXON is the only provider, so this lists models, not endpoints. The list
+ * is the bundled catalogue until "Refresh" reads the live pool, which is what
+ * makes a rotated model show up without a redeploy.
  */
 export function ChatModelPicker({ disabled = false }: { disabled?: boolean }): JSX.Element {
-  const connection = useAIConnectionStore();
-  const openSettings = useSettingsStore((s) => s.openSettings);
+  const model = useAIConnectionStore((s) => s.model);
+  const setModel = useAIConnectionStore((s) => s.setModel);
   const [open, setOpen] = useState(false);
   const [live, setLive] = useState<readonly AIModelOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,36 +54,23 @@ export function ChatModelPicker({ disabled = false }: { disabled?: boolean }): J
     };
   }, [open]);
 
-  useEffect(() => {
-    setLive([]);
-  }, [connection.provider, connection.baseUrl]);
+  const options = live.length ? live : ZYRAXON_MODELS;
+  const selected = options.find((option) => option.id === model);
+  const defaultModel = pickDefaultModel();
 
-  const preset = providerPreset(connection.provider);
-  const models = live.length ? live : modelsForProvider(connection.provider);
-  const options = models.some((m) => m.id === connection.model) || !connection.model
-    ? models
-    : [{ id: connection.model, label: connection.model, inputModalities: ["text"] as const }, ...models];
-
-  const chooseProvider = (provider: AIProviderId) => {
-    const next = providerPreset(provider);
-    connection.configure({ provider, baseUrl: next.baseUrl, model: next.defaultModel, apiKey: "" });
-    setLive([]);
-  };
-
-  const loadModels = async () => {
+  const refresh = async () => {
     setLoading(true);
+    setStatus(null);
     try {
-      const discovered = await discoverCompatibleModels({
-        provider: preset.wire === "anthropic" ? "anthropic-compatible" : "openai-compatible",
-        baseUrl: connection.baseUrl,
-        apiKey: connection.apiKey,
-      });
-      setLive(discovered.map((m) => ({ id: m.id, label: m.label, inputModalities: ["text"] as const })));
-      if (discovered.length && !discovered.some((m) => m.id === connection.model)) {
-        connection.configure({ model: discovered[0].id });
+      const records = await listModels();
+      if (!records.length) {
+        setStatus("The gateway returned no models.");
+        return;
       }
-    } catch {
-      // Full error reporting lives in Settings → AI Editor.
+      setLive(records.map(fromGateway));
+      setStatus(`Live: ${records.length} models.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not read the catalogue.");
     } finally {
       setLoading(false);
     }
@@ -80,102 +80,80 @@ export function ChatModelPicker({ disabled = false }: { disabled?: boolean }): J
     <div ref={rootRef} className="relative min-w-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={`${preset.label} · ${connection.model || "no model"}`}
+        title={`ZYRAXON · ${selected?.label ?? model}`}
         className="flex max-w-full min-w-0 items-center gap-1 rounded-md border border-border bg-bg-2 px-1.5 py-1 text-[10px] text-fg-2 transition-colors hover:border-border-strong hover:text-fg disabled:opacity-40"
       >
-        <span className="truncate font-medium">{connection.model || "Select model"}</span>
+        {model === defaultModel && <Star size={9} className="shrink-0 text-accent" aria-hidden />}
+        <span className="truncate font-medium">{selected?.label ?? model ?? "Select model"}</span>
         <ChevronDown size={10} className="shrink-0" aria-hidden />
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 max-h-[60vh] w-64 overflow-y-auto rounded-lg border border-border bg-bg-1 p-1.5 shadow-lg"
+          className="absolute right-0 z-50 mt-1 max-h-[60vh] w-72 overflow-y-auto rounded-lg border border-border bg-bg-1 p-1.5 shadow-lg"
         >
-          <div className="px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-fg-muted">
-            Provider
-          </div>
-          {AI_PROVIDER_PRESETS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.id === connection.provider}
-              onClick={() => chooseProvider(option.id)}
-              className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] text-fg-2 hover:bg-hover hover:text-fg"
-            >
-              <Check
-                size={11}
-                className={`shrink-0 ${option.id === connection.provider ? "text-accent" : "opacity-0"}`}
-                aria-hidden
-              />
-              <span className="truncate">{option.label}</span>
-              {option.keyless && <span className="ml-auto shrink-0 text-[9px] text-fg-muted">no key</span>}
-            </button>
-          ))}
-
-          <div className="mt-1 flex items-center justify-between border-t border-border px-1.5 py-1">
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-fg-muted">Model</span>
+          <div className="flex items-center justify-between px-1.5 py-1">
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-fg-muted">
+              ZYRAXON model
+            </span>
             <button
               type="button"
-              onClick={() => void loadModels()}
+              onClick={() => void refresh()}
               disabled={loading}
               className="flex items-center gap-1 text-[9px] text-accent hover:underline disabled:opacity-50"
             >
               <RefreshCw size={9} className={loading ? "animate-spin" : ""} aria-hidden />
-              {loading ? "Loading" : "Load"}
+              {loading ? "Reading" : "Refresh"}
             </button>
           </div>
 
-          {options.length === 0 && (
-            <p className="px-1.5 py-1 text-[10px] text-fg-muted">
-              No preset models — type an ID in Settings.
+          {options.map((option) => {
+            const routed = option.routedModalities ?? option.inputModalities;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={option.id === model}
+                onClick={() => {
+                  setModel(option.id);
+                  setOpen(false);
+                }}
+                title={option.description ?? option.id}
+                className="flex w-full items-start gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-hover"
+              >
+                <Check
+                  size={11}
+                  className={`mt-0.5 shrink-0 ${option.id === model ? "text-accent" : "opacity-0"}`}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1">
+                    <span className="truncate text-[11px] text-fg-2">{option.label}</span>
+                    {option.id === defaultModel && (
+                      <span className="shrink-0 rounded bg-accent-soft px-1 text-[8px] text-accent">
+                        default
+                      </span>
+                    )}
+                  </span>
+                  <span className="block truncate text-[9px] text-fg-muted">
+                    {option.description ? `${option.description} · ` : ""}routes {routed.join(", ")}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+
+          {status && (
+            <p role="status" className="mt-1 border-t border-border px-1.5 pt-1 text-[9px] leading-relaxed text-fg-muted">
+              {status}
             </p>
           )}
-          {options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.id === connection.model}
-              onClick={() => {
-                connection.configure({ model: option.id });
-                setOpen(false);
-              }}
-              title={option.description ?? option.id}
-              className="flex w-full items-start gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-hover"
-            >
-              <Check
-                size={11}
-                className={`mt-0.5 shrink-0 ${option.id === connection.model ? "text-accent" : "opacity-0"}`}
-                aria-hidden
-              />
-              <span className="min-w-0">
-                <span className="block truncate text-[11px] text-fg-2">{option.label}</span>
-                {option.inputModalities.length > 1 && (
-                  <span className="block truncate text-[9px] text-fg-muted">
-                    reads {option.inputModalities.join(", ")}
-                  </span>
-                )}
-              </span>
-            </button>
-          ))}
-
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              openSettings("ai-editor");
-            }}
-            className="mt-1 flex w-full items-center gap-1.5 border-t border-border px-1.5 py-1.5 text-left text-[10px] text-fg-2 hover:text-fg"
-          >
-            <Settings size={11} aria-hidden />
-            API keys, base URL, custom model…
-          </button>
         </div>
       )}
     </div>

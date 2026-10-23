@@ -11,11 +11,10 @@ import type {
   LoopUserAttachment,
 } from "@openreel/agent";
 import { runExclusive } from "../services/agent/host-singleton";
-import { makeDirectBYOKClient, validateAIEndpoint } from "../services/agent/direct-llm-transport";
+import { makeZyraxonClient } from "../services/agent/zyraxon-transport";
 import { EditingSession } from "../services/agent/editing-session";
 import { editingToolDefs, editingToolReadOnly, executeEditingTool, EDITING_SYSTEM } from "../services/agent/editing-tools";
 import { useAIConnectionStore } from "./ai-connection-store";
-import { isKeyless, isKnownProviderId, resolveWire } from "./ai-provider-catalog";
 import {
   conversationTitle,
   useChatHistoryStore,
@@ -165,17 +164,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       get().setProjectContext(currentProjectId);
     }
 
-    const { provider, model, baseUrl: inputBaseUrl, apiKey } = useAIConnectionStore.getState();
-    if (!isKnownProviderId(provider)) { set({ error: "Choose a provider in Settings → AI Editor." }); return; }
-    if (!model.trim()) { set({ error: "Enter a model ID in Settings → AI Editor." }); return; }
-    let baseUrl: string;
-    try { baseUrl = validateAIEndpoint(inputBaseUrl); } catch { set({ error: "Enter a valid HTTPS endpoint, or HTTP on localhost." }); return; }
-    if (!isKeyless(provider) && !apiKey) {
-      set({
-        error: "Add your session API key in Settings → AI Editor before sending an edit request.",
-      });
-      return;
-    }
+    const { model } = useAIConnectionStore.getState();
+    if (!model.trim()) { set({ error: "Pick a ZYRAXON model in the chat box." }); return; }
 
     const active = get();
     const conversationId = active.currentConversationId ?? genId();
@@ -276,17 +266,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const host = new EditingSession(controller.signal);
     let llm;
-    try { llm = makeDirectBYOKClient({
-      provider,
+    try { llm = makeZyraxonClient({
       model,
-      baseUrl,
-      apiKey,
       signal: controller.signal,
     }); } catch (error) {
-      set({ status: "error", error: error instanceof Error ? error.message : "Invalid connection settings", abortController: null });
+      set({ status: "error", error: error instanceof Error ? error.message : "Invalid ZYRAXON settings", abortController: null });
       return;
     }
-    const tools = editingToolDefs(resolveWire(provider));
+    const tools = editingToolDefs("openai");
     const autoConfirm = useSettingsStore.getState().agentAutoConfirm;
     const dryRun = useSettingsStore.getState().agentDryRun;
 
@@ -316,7 +303,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     );
     } catch (error) {
       if (activeSeq !== seq) return;
-      set({ status: controller.signal.aborted ? "idle" : "error", error: controller.signal.aborted ? null : error instanceof Error ? error.message : "The AI turn failed.", abortController: null, pendingConfirm: null, conversation: [] });
+      set({ status: controller.signal.aborted ? "idle" : "error", error: controller.signal.aborted ? null : error instanceof Error ? error.message : "এআই ধাপটি ব্যর্থ হয়েছে।", abortController: null, pendingConfirm: null, conversation: [] });
       saveConversationSnapshot(get()); return;
     }
 
@@ -325,21 +312,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const wasAborted = controller.signal.aborted;
     const stopNotice =
       result.stoppedReason === "max_steps"
-        ? "I stopped after reaching this turn's step limit. Ask me to continue if more work is needed."
+        ? "এই ধাপের সীমা শেষ, তাই আমি থেমেছি। আরও কাজ লাগলে আবার বলুন।"
         : result.stoppedReason === "max_tool_calls"
-          ? "I stopped after reaching this turn's tool-call limit. Ask me to continue if more work is needed."
+          ? "এই ধাপে টুল কলের সীমা শেষ, তাই আমি থেমেছি। আরও কাজ লাগলে আবার বলুন।"
           : result.stoppedReason === "budget"
-            ? "The model stopped at its response or token limit. Ask me to continue, or increase the model's output limit."
+            ? "মডেলটি তার উত্তর বা টোকেন সীমায় থেমে গেছে। আবার বলুন, বা মডেলের আউটপুট সীমা বাড়ান।"
             : undefined;
     set((state) => ({
       messages: state.messages.map((message) => {
         if (message.id !== assistantId) return message;
-        const finalText = wasAborted ? "Cancelled. Pending edits were discarded." : !result.committed ? "The turn failed. No edits were applied." : result.text || message.text;
+        const finalText = wasAborted ? "বাতিল করা হয়েছে। অপেক্ষমাণ এডিট বাদ দেওয়া হয়েছে।" : !result.committed ? "এই ধাপটি ব্যর্থ হয়েছে। কোনো এডিট প্রয়োগ করা হয়নি।" : result.text || message.text;
         const emptyNotice =
           !finalText && result.stoppedReason === "end_turn"
             ? message.toolCalls.length > 0
-              ? "The edits finished, but the model did not provide a written summary."
-              : "The model returned an empty response. Try again or choose another model."
+              ? "এডিট শেষ হয়েছে, তবে মডেল লিখিত সারসংক্ষেপ দেয়নি।"
+              : "মডেল কোনো উত্তর দেয়নি। আবার চেষ্টা করুন বা অন্য মডেল বাছুন।"
             : undefined;
         return {
           ...message,
@@ -366,7 +353,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: wasAborted
         ? null
         : result.stoppedReason === "error"
-          ? (state.error ?? "The AI turn failed.")
+          ? (state.error ?? "এআই ধাপটি ব্যর্থ হয়েছে।")
           : state.error,
     }));
     saveConversationSnapshot(get());

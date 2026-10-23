@@ -200,6 +200,38 @@ export interface GenerateImageOptions {
   readonly seed?: number;
 }
 
+/** One result from a keyless stock/animation catalogue. */
+export interface StockSearchResult {
+  readonly id: string;
+  readonly source: string;
+  readonly kind: "video" | "audio" | "image" | "animation" | "icon" | "youtube";
+  readonly title: string;
+  /** Direct, CORS-enabled download URL to pass to import_media_from_url. */
+  readonly importUrl?: string;
+  readonly previewUrl?: string;
+  readonly pageUrl?: string;
+  readonly author?: string;
+  readonly license?: string;
+  readonly durationSec?: number;
+  /** Present when the asset is browsable but not downloadable. */
+  readonly unavailable?: string;
+}
+
+export interface StockSearchOptions {
+  readonly source?: string;
+  readonly query?: string;
+  readonly limit?: number;
+}
+
+/** A Lottie animation added to the project as a motion composition. */
+export interface ImportedAnimationRef {
+  readonly compositionId: string;
+  readonly name: string;
+  readonly durationSec: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface GeneratedImageRef {
   readonly mediaId: string;
   readonly name: string;
@@ -275,6 +307,20 @@ export interface EditingHost {
    * the live web host provides.
    */
   generateImage?(options: GenerateImageOptions): Promise<GeneratedImageRef>;
+  /**
+   * Search the keyless stock catalogues (Mixkit footage, LottieFiles
+   * animations, Wikimedia, Openverse images/audio, Iconify icons, YouTube).
+   * Optional: it needs network access that only the live web host provides.
+   */
+  searchStock?(options: StockSearchOptions): Promise<readonly StockSearchResult[]>;
+  /**
+   * Download a Lottie animation JSON and register it as a motion composition.
+   * Optional: it needs network access that only the live web host provides.
+   */
+  importAnimationFromUrl?(
+    url: string,
+    options?: { name?: string },
+  ): Promise<ImportedAnimationRef>;
   /**
    * Render a motion composition to a finished video file (mp4 / transparent
    * WebM / ProRes 4444 MOV). Optional because it needs the renderer-side motion

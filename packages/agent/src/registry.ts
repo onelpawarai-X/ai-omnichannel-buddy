@@ -15555,6 +15555,55 @@ const TOOLS: RegisteredTool[] = [
     },
   },
   {
+    name: "search_stock",
+    domain: "media",
+    title: "Search stock libraries",
+    description:
+      "Search the keyless public media catalogues and return candidate assets with a direct importUrl. Sources: mixkit (free stock video: fire, smoke, light leaks, particles, green screen, backgrounds), lottiefiles (vector animations), commons (Wikimedia video), openverse-image, openverse-audio (music and sound effects), iconify (open SVG icons), youtube (browse; imports the poster frame only). Call it before import_media_from_url so you place real, licensed footage instead of guessing URLs. A mixkit query is a category slug such as fire, smoke, light, water, space, snow, rain, cloud, countdown, green-screen, abstract, background, city, nature, people.",
+    inputSchema: obj(
+      { source: str, query: str, limit: num },
+      ["source"],
+    ),
+    readOnly: true,
+    destructive: false,
+    expensive: false,
+    handler: async (args, host) => {
+      if (typeof host.searchStock !== "function") {
+        return fail("search_stock is not available in this host", "UNSUPPORTED");
+      }
+      const source = typeof args.source === "string" ? args.source : "";
+      if (!source) return fail("Name a source: mixkit, lottiefiles, commons, openverse-image, openverse-audio, iconify or youtube.", "BAD_INPUT");
+      const results = await host.searchStock({
+        source,
+        query: typeof args.query === "string" ? args.query : undefined,
+        limit: typeof args.limit === "number" ? args.limit : undefined,
+      });
+      if (!results.length) return ok(`No results from ${source}.`, { source, results: [] });
+      return ok(`Found ${results.length} result(s) from ${source}.`, { source, results });
+    },
+  },
+  {
+    name: "import_animation_from_url",
+    domain: "media",
+    title: "Import an animation",
+    description:
+      "Download a Lottie animation JSON (for example a search_stock result from the lottiefiles source) and register it as a motion composition in the project. Returns the compositionId. Use search_stock with source lottiefiles to find one.",
+    inputSchema: obj({ url: str, name: str }, ["url"]),
+    readOnly: false,
+    destructive: false,
+    expensive: false,
+    handler: async (args, host) => {
+      if (typeof host.importAnimationFromUrl !== "function") {
+        return fail("import_animation_from_url is not available in this host", "UNSUPPORTED");
+      }
+      host.requireOpenProject();
+      const ref = await host.importAnimationFromUrl(String(args.url), {
+        name: typeof args.name === "string" ? args.name : undefined,
+      });
+      return ok(`Imported animation "${ref.name}" (${ref.durationSec.toFixed(2)}s)`, ref);
+    },
+  },
+  {
     name: "generate_image",
     domain: "media",
     title: "Generate an image",

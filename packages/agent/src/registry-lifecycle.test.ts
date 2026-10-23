@@ -8,6 +8,8 @@ import type {
   ProjectRef,
   ImportedMediaRef,
   CreateProjectOptions,
+  ImportedAnimationRef,
+  StockSearchResult,
 } from "./host";
 
 describe("project/media lifecycle tools", () => {
@@ -18,6 +20,8 @@ describe("project/media lifecycle tools", () => {
       "list_projects",
       "save_project",
       "import_media_from_url",
+      "search_stock",
+      "import_animation_from_url",
     ]) {
       expect(getTool(name), name).toBeDefined();
     }
@@ -214,6 +218,61 @@ describe("project/media lifecycle tools", () => {
     );
     expect(res.ok).toBe(true);
     expect(received?.svg).toBe("<svg/>");
+  });
+
+  it("search_stock is read-only and reports UNSUPPORTED without a host method", async () => {
+    expect(getTool("search_stock")?.readOnly).toBe(true);
+    const host = new HeadlessHost(makeEmptyProject());
+    const res = await executeTool("search_stock", { source: "mixkit", query: "fire" }, host);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe("UNSUPPORTED");
+  });
+
+  it("search_stock rejects a call that names no source", async () => {
+    const base = new HeadlessHost(makeEmptyProject());
+    const host: EditingHost = Object.assign(base, {
+      async searchStock(): Promise<readonly StockSearchResult[]> {
+        throw new Error("should not be reached");
+      },
+    });
+    const res = await executeTool("search_stock", { source: "" }, host);
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe("BAD_INPUT");
+  });
+
+  it("search_stock returns the host results and says how many there were", async () => {
+    let received: { source?: string; query?: string; limit?: number } | undefined;
+    const base = new HeadlessHost(makeEmptyProject());
+    const host: EditingHost = Object.assign(base, {
+      async searchStock(options: { source?: string; query?: string; limit?: number }) {
+        received = options;
+        return [
+          { id: "mixkit:1", source: "mixkit", kind: "video" as const, title: "Fire", importUrl: "https://cdn/x.mp4" },
+        ];
+      },
+    });
+    const res = await executeTool("search_stock", { source: "mixkit", query: "fire", limit: 5 }, host);
+    expect(res.ok).toBe(true);
+    expect(res.summary).toContain("1 result");
+    expect(received).toEqual({ source: "mixkit", query: "fire", limit: 5 });
+    expect((res.data as { results: unknown[] }).results).toHaveLength(1);
+  });
+
+  it("import_animation_from_url needs an open project and returns the composition ref", async () => {
+    const base = new HeadlessHost(makeEmptyProject());
+    let opened = false;
+    const host: EditingHost = Object.assign(base, {
+      requireOpenProject(): void {
+        opened = true;
+      },
+      async importAnimationFromUrl(): Promise<ImportedAnimationRef> {
+        return { compositionId: "c1", name: "Fire", durationSec: 2, width: 512, height: 512 };
+      },
+    });
+    const res = await executeTool("import_animation_from_url", { url: "https://cdn/a.json" }, host);
+    expect(res.ok).toBe(true);
+    expect(opened).toBe(true);
+    expect(res.data).toMatchObject({ compositionId: "c1", name: "Fire" });
   });
 
   it("import_media_from_url requires an open project before fetching", async () => {

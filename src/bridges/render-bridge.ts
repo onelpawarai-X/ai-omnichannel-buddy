@@ -544,6 +544,95 @@ export class RenderBridge {
   }
 
   /**
+   * Render one frame at an arbitrary time and return it as a PNG data URL.
+   *
+   * Unlike `renderCurrentFrame`, this does not disturb the playhead and does
+   * not depend on the visible canvas, so an agent can read a specific instant
+   * of the timeline. The image is downscaled to keep a frame affordable as a
+   * model attachment.
+   *
+   * @param time - Timeline time in seconds
+   * @param maxEdge - Longest edge of the returned image, in pixels
+   */
+  async captureFrameAt(
+    time: number,
+    maxEdge = 640,
+  ): Promise<{ dataUrl: string; mimeType: string; time: number; width: number; height: number } | null> {
+    const frame = await this.renderFrame(time);
+    if (!frame) return null;
+
+    const ratio = Math.min(1, maxEdge / Math.max(frame.width, frame.height));
+    const width = Math.max(1, Math.round(frame.width * ratio));
+    const height = Math.max(1, Math.round(frame.height * ratio));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(frame.image, 0, 0, width, height);
+    return { dataUrl: canvas.toDataURL("image/png"), mimeType: "image/png", time, width: frame.width, height: frame.height };
+  }
+
+  /**
+   * Render a contact sheet of evenly spaced frames across a time range.
+   *
+   * One image carries many instants, which is what lets a model see motion
+   * across a span without one request per frame. Each cell is labelled with
+   * its timeline time so the model can name the second it wants to cut at.
+   */
+  async captureFrameStrip(
+    fromSec: number,
+    toSec: number,
+    options: { frames?: number; cellEdge?: number } = {},
+  ): Promise<{ dataUrl: string; mimeType: string; times: number[]; cellEdge: number } | null> {
+    const span = Math.max(0.001, toSec - fromSec);
+    const count = Math.max(2, Math.min(16, Math.round(options.frames ?? 6)));
+    const cellEdge = Math.max(96, Math.min(480, Math.round(options.cellEdge ?? 240)));
+
+    const times: number[] = [];
+    const images: ImageBitmap[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const time = fromSec + (span * i) / (count - 1);
+      const frame = await this.renderFrame(time);
+      if (!frame) continue;
+      times.push(time);
+      images.push(frame.image);
+    }
+    if (!images.length) return null;
+
+    const sample = images[0];
+    const aspect = sample.width / sample.height;
+    const cellWidth = aspect >= 1 ? cellEdge : Math.round(cellEdge * aspect);
+    const cellHeight = aspect >= 1 ? Math.round(cellEdge / aspect) : cellEdge;
+    const labelHeight = 16;
+    const columns = Math.min(count, Math.ceil(Math.sqrt(count * 1.6)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cellWidth * columns;
+    canvas.height = (cellHeight + labelHeight) * Math.ceil(images.length / columns);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    images.forEach((image, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = column * cellWidth;
+      const y = row * (cellHeight + labelHeight);
+      ctx.drawImage(image, x, y, cellWidth, cellHeight);
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.fillRect(x, y + cellHeight, cellWidth, labelHeight);
+      ctx.fillStyle = "#fff";
+      ctx.font = "11px monospace";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${times[index].toFixed(2)}s`, x + 4, y + cellHeight + labelHeight / 2);
+    });
+
+    return { dataUrl: canvas.toDataURL("image/png"), mimeType: "image/png", times, cellEdge };
+  }
+
+  /**
    * Get render statistics
    */
   getRenderStats(): RenderStats {

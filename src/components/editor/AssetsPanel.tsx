@@ -3,7 +3,7 @@ import {
   Image as ImageIcon, Film, Music, Plus, Upload, Trash2,
   Square, Circle, Triangle, Star, ArrowRight, Hexagon, FileCode, AlertTriangle,
   RefreshCw, Palette, Sparkles, Video,
-  Type, Shapes, Wand2, LayoutTemplate, Zap, Shuffle,
+  Type, Shapes, Wand2, LayoutTemplate, Zap, Shuffle, Globe,
 } from "@/icons/lucide-compat";
 import {
   BACKGROUND_PRESETS,
@@ -19,6 +19,7 @@ import { AspectRatioMatchDialog } from "./dialogs/AspectRatioMatchDialog";
 import { AIGenTab } from "./AIGenTab";
 import { RecipesTab } from "./panels/RecipesTab";
 import { TemplatesTab } from "./panels/TemplatesTab";
+import { StockShelfPanel } from "./panels/StockShelfPanel";
 import {
   EffectsPanel,
   TransitionsPanel,
@@ -54,7 +55,8 @@ type AssetsTab =
   | "transitions"
   | "ai"
   | "recipes"
-  | "templates";
+  | "templates"
+  | "stock";
 
 const ASSETS_TABS: ReadonlyArray<{
   value: AssetsTab;
@@ -100,6 +102,11 @@ const ASSETS_TABS: ReadonlyArray<{
     value: "templates",
     label: "Project Templates",
     description: "Load full-project starter layouts and presets.",
+  },
+  {
+    value: "stock",
+    label: "Stock",
+    description: "Keyless footage, animations, images, music and icons from public libraries.",
   },
 ] as const;
 
@@ -196,6 +203,7 @@ const TAB_ICONS: Record<AssetsTab, React.ElementType> = {
   ai: Sparkles,
   recipes: Wand2,
   templates: LayoutTemplate,
+  stock: Globe,
 };
 
 const PanelIconButton: React.FC<{
@@ -1419,6 +1427,12 @@ export const AssetsPanel: React.FC = () => {
         return (
           <div className="flex min-h-0 flex-1 flex-col border-t border-border/70 bg-background-secondary content-area-fix">
             <TemplatesTab />
+          </div>
+        );
+      case "stock":
+        return (
+          <div className="flex min-h-0 flex-1 flex-col border-t border-border/70 bg-bg-1">
+            <StockShelfPanel />
           </div>
         );
       default:

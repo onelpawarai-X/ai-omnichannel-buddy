@@ -25,6 +25,9 @@ const ALWAYS_AVAILABLE = new Set([
   "remove_motion_layer",
   "render_motion_frame",
   "insert_motion_into_editor",
+  "view_frame",
+  "view_frame_strip",
+  "search_stock",
   "execute_action",
   "batch_actions",
 ]);
@@ -37,6 +40,10 @@ const MOTION_TERMS = /\b(motion(?: creator| graphics?)?|composition|layer|after 
 const CREATION_TERMS = /\b(3d|three[- ]?d|product|character|scene|model|gltf|glb|rig|mesh|material|texture|bevel|displacement|x[- ]?ray|cloth|camera module|exploded|cinematic|decal|cutaway)\b/i;
 
 const TIMELINE_TERMS = /\b(timeline|clip|clips|footage|video|audio|transition|trim|split|cut|speed|slow(?:er| down)?|fast(?:er| forward)?|reverse|volume|sound|fade|effect|filter|color|zoom|scale|position|crop|opacity|rotate|keyframe|animate|animation)\b/i;
+
+// Stock and animation sourcing: keep the catalogue tools available whenever the
+// request is about finding or bringing in outside media.
+const STOCK_TERMS = /\b(stock|footage|b-?roll|green screen|overlay|animation|animated|lottie|icon|sticker|music|sound effect|sfx|free (?:video|music|image)|youtube)\b/i;
 
 const TIMELINE_DOMAINS = new Set([
   "track",
@@ -95,6 +102,7 @@ export function selectToolsForPrompt(
   const wantsMotion = MOTION_TERMS.test(prompt);
   const wantsCreation = CREATION_TERMS.test(prompt);
   const wantsTimeline = TIMELINE_TERMS.test(prompt);
+  const wantsStock = STOCK_TERMS.test(prompt);
   const prior = new Set(options.priorToolNames ?? []);
   const promptWords = new Set(words(prompt));
 
@@ -107,6 +115,7 @@ export function selectToolsForPrompt(
     // existing main-timeline clip. Do not make those tool families mutually
     // exclusive when the user explicitly refers to timeline editing.
     if (wantsTimeline && TIMELINE_DOMAINS.has(tool.domain)) return true;
+    if (wantsStock && (tool.domain === "media" || tool.domain === "motion")) return true;
     return tool.domain === "read" || ["project", "media", "export", "raw"].includes(tool.domain);
   });
 
@@ -119,7 +128,8 @@ export function selectToolsForPrompt(
         (prior.has(tool.name) ? 5_000 : 0) +
         (wantsCreation && isCreationTool(tool) ? 100 : 0) +
         (wantsMotion && tool.domain === "motion" ? 50 : 0) +
-        (wantsTimeline && TIMELINE_DOMAINS.has(tool.domain) ? 50 : 0),
+        (wantsTimeline && TIMELINE_DOMAINS.has(tool.domain) ? 50 : 0) +
+        (wantsStock && /stock|animation|media/.test(`${tool.name} ${tool.domain}`) ? 60 : 0),
     }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, maxTools)

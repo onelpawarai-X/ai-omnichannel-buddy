@@ -12,7 +12,12 @@ import type {
   ImportedMediaRef,
   GenerateImageOptions,
   GeneratedImageRef,
+  StockSearchOptions,
+  StockSearchResult,
+  ImportedAnimationRef,
 } from "@openreel/agent";
+import { searchSource, type StockSourceId } from "../stock-library";
+import { importAnimationFromUrl as importAnimationFromUrlShared } from "../stock-import";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
 import { getMediaBridge, initializeMediaBridge } from "../../bridges/media-bridge";
@@ -200,6 +205,39 @@ export class EditingSession implements EditingHost {
     const name = options.name ?? `generated-${Date.now()}.png`;
     const ref = await this.addMediaFile(new File([blob], name, { type: blob.type || "image/png" }), name);
     return { mediaId: ref.mediaId, name: ref.name, width: ref.width ?? width, height: ref.height ?? height };
+  }
+
+  /** Keyless stock search, straight from the browser for most sources. */
+  async searchStock(options: StockSearchOptions): Promise<readonly StockSearchResult[]> {
+    this.requireOpenProject();
+    const source = (options.source ?? "").trim() as StockSourceId;
+    const results = await searchSource(source, options.query ?? "", options.limit ?? 12);
+    return results.map((asset) => ({
+      id: asset.id,
+      source: asset.source,
+      kind: asset.kind,
+      title: asset.title,
+      ...(asset.importUrl ? { importUrl: asset.importUrl } : {}),
+      ...(asset.previewUrl ? { previewUrl: asset.previewUrl } : {}),
+      ...(asset.pageUrl ? { pageUrl: asset.pageUrl } : {}),
+      ...(asset.author ? { author: asset.author } : {}),
+      ...(asset.license ? { license: asset.license } : {}),
+      ...(asset.durationSec ? { durationSec: asset.durationSec } : {}),
+      ...(asset.unavailable ? { unavailable: asset.unavailable } : {}),
+    }));
+  }
+
+  /** Download a Lottie JSON and register it as a motion composition. */
+  async importAnimationFromUrl(url: string, options?: { name?: string }): Promise<ImportedAnimationRef> {
+    this.requireOpenProject();
+    const imported = await importAnimationFromUrlShared(url, options?.name);
+    return {
+      compositionId: imported.compositionId,
+      name: imported.name,
+      durationSec: imported.durationSec,
+      width: imported.width,
+      height: imported.height,
+    };
   }
 
   async createTextOverlay(options: TextOverlayOptions) {

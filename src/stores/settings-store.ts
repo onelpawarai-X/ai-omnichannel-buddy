@@ -1,54 +1,13 @@
 import { create } from "zustand";
 import { subscribeWithSelector, persist } from "zustand/middleware";
 
-export interface ServiceConfig {
-  readonly id: string;
-  readonly label: string;
-  readonly description: string;
-  readonly docsUrl?: string;
-  readonly keyOptional?: boolean;
-}
-
-/**
- * Registry of supported external services that require API keys.
- * Add new services here as the app integrates more third-party APIs.
- */
-export const SERVICE_REGISTRY: readonly ServiceConfig[] = [
-  {
-    id: "openai-compatible",
-    label: "OpenAI-compatible endpoint",
-    description: "Any OpenAI-compatible API host; API key optional",
-    keyOptional: true,
-  },
-  {
-    id: "anthropic-compatible",
-    label: "Anthropic-compatible endpoint",
-    description: "Any Anthropic Messages-compatible API host; API key optional",
-    keyOptional: true,
-  },
-] as const;
-
-export type LlmProvider = "openai-compatible" | "anthropic-compatible";
-export type SettingsTab = "general" | "ai-editor" | "api-keys" | "mcp";
-
-function isLlmProvider(value: unknown): value is LlmProvider {
-  return value === "openai-compatible" || value === "anthropic-compatible";
-}
+export type SettingsTab = "general" | "ai-editor" | "mcp";
 
 export interface SettingsState {
   // General preferences
   autoSave: boolean;
   autoSaveInterval: number;
   language: string;
-
-  // AI/Service preferences
-  defaultLlmProvider: LlmProvider | null;
-  /** User-defined compatible endpoint and model for the agent chat. */
-  llmBaseUrl: string;
-  llmModel: string;
-  favoriteVoices: Array<{ voiceId: string; name: string; previewUrl?: string }>;
-  favoriteModels: Array<{ modelId: string; name: string }>;
-  configuredServices: string[]; // IDs of services with stored API keys
 
   /** Desktop MCP server: auto-allow destructive/expensive tools from trusted local clients. */
   mcpAutoAllowTrustedLocal: boolean;
@@ -68,18 +27,9 @@ export interface SettingsState {
   setAutoSave: (enabled: boolean) => void;
   setAutoSaveInterval: (minutes: number) => void;
   setLanguage: (lang: string) => void;
-  setDefaultLlmProvider: (provider: LlmProvider | null) => void;
-  setLlmBaseUrl: (url: string) => void;
-  setLlmModel: (model: string) => void;
   setMcpAutoAllowTrustedLocal: (enabled: boolean) => void;
   setAgentAutoConfirm: (enabled: boolean) => void;
   setAgentDryRun: (enabled: boolean) => void;
-  addFavoriteVoice: (voice: { voiceId: string; name: string; previewUrl?: string }) => void;
-  removeFavoriteVoice: (voiceId: string) => void;
-  addFavoriteModel: (model: { modelId: string; name: string }) => void;
-  removeFavoriteModel: (modelId: string) => void;
-  addConfiguredService: (serviceId: string) => void;
-  removeConfiguredService: (serviceId: string) => void;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
 }
@@ -91,13 +41,6 @@ export const useSettingsStore = create<SettingsState>()(
         autoSave: true,
         autoSaveInterval: 5,
         language: "en",
-
-        defaultLlmProvider: null,
-        llmBaseUrl: "",
-        llmModel: "",
-        favoriteVoices: [],
-        favoriteModels: [],
-        configuredServices: [],
 
         mcpAutoAllowTrustedLocal: true,
         agentAutoConfirm: false,
@@ -115,59 +58,12 @@ export const useSettingsStore = create<SettingsState>()(
         setLanguage: (lang: string) => set({ language: lang }),
 
 
-        setDefaultLlmProvider: (provider: LlmProvider | null) =>
-          set({ defaultLlmProvider: provider }),
-
-        setLlmBaseUrl: (url: string) => set({ llmBaseUrl: url }),
-
-        setLlmModel: (model: string) => set({ llmModel: model }),
-
         setMcpAutoAllowTrustedLocal: (enabled: boolean) =>
           set({ mcpAutoAllowTrustedLocal: enabled }),
 
         setAgentAutoConfirm: (enabled: boolean) => set({ agentAutoConfirm: enabled }),
 
         setAgentDryRun: (enabled: boolean) => set({ agentDryRun: enabled }),
-
-
-
-        addFavoriteVoice: (voice) => {
-          const { favoriteVoices } = get();
-          if (!favoriteVoices.some((v) => v.voiceId === voice.voiceId)) {
-            set({ favoriteVoices: [...favoriteVoices, voice] });
-          }
-        },
-
-        removeFavoriteVoice: (voiceId: string) => {
-          const { favoriteVoices } = get();
-          set({ favoriteVoices: favoriteVoices.filter((v) => v.voiceId !== voiceId) });
-        },
-
-        addFavoriteModel: (model) => {
-          const { favoriteModels } = get();
-          if (!favoriteModels.some((m) => m.modelId === model.modelId)) {
-            set({ favoriteModels: [...favoriteModels, model] });
-          }
-        },
-
-        removeFavoriteModel: (modelId: string) => {
-          const { favoriteModels } = get();
-          set({ favoriteModels: favoriteModels.filter((m) => m.modelId !== modelId) });
-        },
-
-        addConfiguredService: (serviceId: string) => {
-          const { configuredServices } = get();
-          if (!configuredServices.includes(serviceId)) {
-            set({ configuredServices: [...configuredServices, serviceId] });
-          }
-        },
-
-        removeConfiguredService: (serviceId: string) => {
-          const { configuredServices } = get();
-          set({
-            configuredServices: configuredServices.filter((id) => id !== serviceId),
-          });
-        },
 
 
 
@@ -181,46 +77,25 @@ export const useSettingsStore = create<SettingsState>()(
       }),
       {
         name: "openreel-settings",
-        version: 7,
-        migrate: (persisted, version) => {
+        version: 8,
+        migrate: (persisted) => {
+          // Provider, endpoint, key and voice fields are gone: ZYRAXON is the
+          // only provider and speech preferences live in their own store.
           const next = (persisted ?? {}) as Record<string, unknown>;
-          if (version < 2) next.mcpAutoAllowTrustedLocal = true;
-          if (version < 3 && (!next.llmModel || next.llmModel === "gpt-4o")) {
-            next.llmModel = "gpt-5.6-sol";
-          }
-          const previousProvider = next.defaultLlmProvider;
-          if (!isLlmProvider(previousProvider)) {
-            next.defaultLlmProvider = null;
-            next.llmBaseUrl = "";
-            next.llmModel = "";
-          } else {
-            next.llmBaseUrl =
-              typeof next.llmBaseUrl === "string"
-                ? next.llmBaseUrl
-                : previousProvider === "openai-compatible" &&
-                    typeof next.openaiCompatibleBaseUrl === "string"
-                  ? next.openaiCompatibleBaseUrl
-                  : "";
-            next.llmModel =
-              previousProvider === "openai-compatible" &&
-              typeof next.openaiCompatibleModel === "string"
-                ? next.openaiCompatibleModel
-                : typeof next.llmModel === "string"
-                  ? next.llmModel
-                  : "";
-          }
+          delete next.defaultLlmProvider;
+          delete next.llmBaseUrl;
+          delete next.llmModel;
+          delete next.openaiCompatibleBaseUrl;
+          delete next.openaiCompatibleModel;
+          delete next.favoriteVoices;
+          delete next.favoriteModels;
+          delete next.configuredServices;
           return next as unknown as SettingsState;
         },
         partialize: (state) => ({
           autoSave: state.autoSave,
           autoSaveInterval: state.autoSaveInterval,
           language: state.language,
-          defaultLlmProvider: state.defaultLlmProvider,
-          llmBaseUrl: state.llmBaseUrl,
-          llmModel: state.llmModel,
-          favoriteVoices: state.favoriteVoices,
-          favoriteModels: state.favoriteModels,
-          configuredServices: state.configuredServices,
           mcpAutoAllowTrustedLocal: state.mcpAutoAllowTrustedLocal,
           agentAutoConfirm: state.agentAutoConfirm,
           agentDryRun: state.agentDryRun,
