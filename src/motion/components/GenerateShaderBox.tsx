@@ -4,10 +4,9 @@ import { Sparkles } from "@/icons/lucide-compat";
 import type { MotionShaderCategory, MotionShaderDef } from "@openreel/core";
 import { ToolcraftText } from "@openreel/ui";
 import { generateAiShader, type LlmMessage } from "../../services/ai-shader";
-import { makeBYOKClient } from "../../services/agent/llm-transport";
-import { getSecret, isSessionUnlocked } from "../../services/secure-storage";
+import { makeZyraxonClient } from "../../services/agent/zyraxon-transport";
 import { useProjectStore } from "../../stores/project-store";
-import { useSettingsStore, type LlmProvider } from "../../stores/settings-store";
+import { useAIConnectionStore } from "../../stores/ai-connection-store";
 import { Button, Field, TextInput } from "./primitives";
 
 interface GenerateShaderBoxProps {
@@ -20,38 +19,7 @@ type Phase =
   | { readonly kind: "generating" }
   | { readonly kind: "error"; readonly message: string };
 
-const CONFIGURE_PROVIDER = "Configure an AI provider in settings";
-
-function isDesktop(): boolean {
-  return typeof window !== "undefined" && window.openreel?.platform === "desktop";
-}
-
-function resolveModel(): {
-  provider: LlmProvider | null;
-  model: string;
-  baseUrl: string;
-} {
-  const settings = useSettingsStore.getState();
-  return {
-    provider: settings.defaultLlmProvider,
-    model: settings.llmModel.trim(),
-    baseUrl: settings.llmBaseUrl,
-  };
-}
-
-async function resolveApiKey(provider: LlmProvider): Promise<string | null> {
-  if (isDesktop()) return "";
-  const optionalKey =
-    !useSettingsStore.getState().configuredServices.includes(provider);
-  if (optionalKey && !isSessionUnlocked()) return "";
-  if (!isSessionUnlocked()) return null;
-  try {
-    const key = await getSecret(provider);
-    return key ?? (optionalKey ? "" : null);
-  } catch {
-    return null;
-  }
-}
+const PICK_MODEL = "Pick a ZYRAXON model in the chat box";
 
 export function GenerateShaderBox({
   category,
@@ -68,18 +36,13 @@ export function GenerateShaderBox({
 
     setPhase({ kind: "generating" });
 
-    const { provider, model, baseUrl } = resolveModel();
-    if (!provider || !model || !baseUrl.trim()) {
-      setPhase({ kind: "error", message: CONFIGURE_PROVIDER });
-      return;
-    }
-    const apiKey = await resolveApiKey(provider);
-    if (apiKey === null) {
-      setPhase({ kind: "error", message: CONFIGURE_PROVIDER });
+    const model = useAIConnectionStore.getState().model.trim();
+    if (!model) {
+      setPhase({ kind: "error", message: PICK_MODEL });
       return;
     }
 
-    const client = makeBYOKClient({ provider, model, apiKey, baseUrl });
+    const client = makeZyraxonClient({ model });
     const send = async (messages: readonly LlmMessage[]): Promise<string> => {
       const response = await client.complete({
         messages: messages.map((message) => ({

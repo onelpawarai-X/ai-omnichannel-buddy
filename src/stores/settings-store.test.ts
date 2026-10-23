@@ -4,24 +4,44 @@ import { useSettingsStore } from "./settings-store";
 describe("settings store migrations", () => {
   afterEach(() => {
     localStorage.clear();
-    useSettingsStore.setState({
-      autoSave: true,
-      defaultLlmProvider: null,
-      llmBaseUrl: "",
-      llmModel: "",
-    });
+    useSettingsStore.setState({ autoSave: true });
   });
 
-  it("removes legacy preset selections without discarding other preferences", async () => {
+  it("drops the removed provider, endpoint, key and voice fields", async () => {
     localStorage.setItem(
       "openreel-settings",
       JSON.stringify({
-        version: 5,
+        version: 7,
         state: {
           autoSave: false,
-          defaultLlmProvider: "openai",
-          llmModel: "previously-preselected-model",
+          defaultLlmProvider: "openai-compatible",
+          llmBaseUrl: "https://gateway.example/v1",
+          llmModel: "account-tool-model",
+          configuredServices: ["openai"],
+          favoriteVoices: [{ voiceId: "en-US-AriaNeural", name: "Aria" }],
+          favoriteModels: [{ modelId: "gpt-4o", name: "GPT-4o" }],
         },
+      }),
+    );
+
+    await useSettingsStore.persist.rehydrate();
+
+    const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+    expect(state.autoSave).toBe(false);
+    expect(state.defaultLlmProvider).toBeUndefined();
+    expect(state.llmBaseUrl).toBeUndefined();
+    expect(state.llmModel).toBeUndefined();
+    expect(state.configuredServices).toBeUndefined();
+    expect(state.favoriteVoices).toBeUndefined();
+    expect(state.favoriteModels).toBeUndefined();
+  });
+
+  it("keeps unrelated preferences", async () => {
+    localStorage.setItem(
+      "openreel-settings",
+      JSON.stringify({
+        version: 7,
+        state: { autoSave: false, autoSaveInterval: 12, language: "bn" },
       }),
     );
 
@@ -29,32 +49,8 @@ describe("settings store migrations", () => {
 
     expect(useSettingsStore.getState()).toMatchObject({
       autoSave: false,
-      defaultLlmProvider: null,
-      llmBaseUrl: "",
-      llmModel: "",
-    });
-  });
-
-  it("migrates an explicitly configured compatible endpoint", async () => {
-    localStorage.setItem(
-      "openreel-settings",
-      JSON.stringify({
-        version: 6,
-        state: {
-          defaultLlmProvider: "openai-compatible",
-          llmModel: "ignored-preset-model",
-          openaiCompatibleBaseUrl: "http://localhost:11434/v1",
-          openaiCompatibleModel: "qwen-tool-model",
-        },
-      }),
-    );
-
-    await useSettingsStore.persist.rehydrate();
-
-    expect(useSettingsStore.getState()).toMatchObject({
-      defaultLlmProvider: "openai-compatible",
-      llmBaseUrl: "http://localhost:11434/v1",
-      llmModel: "qwen-tool-model",
+      autoSaveInterval: 12,
+      language: "bn",
     });
   });
 });

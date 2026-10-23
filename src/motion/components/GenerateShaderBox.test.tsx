@@ -7,25 +7,18 @@ import {
 } from "@openreel/core/motion/shaders";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { useProjectStore } from "../../stores/project-store";
-import { useSettingsStore } from "../../stores/settings-store";
+import { useAIConnectionStore } from "../../stores/ai-connection-store";
+import { pickDefaultModel } from "../../stores/ai-provider-catalog";
 
 const generateAiShaderMock = vi.fn();
-const getSecretMock = vi.fn();
-const isSessionUnlockedMock = vi.fn();
-const makeBYOKClientMock = vi.fn();
+const makeZyraxonClientMock = vi.fn();
 
 vi.mock("../../services/ai-shader", () => ({
   generateAiShader: (...args: unknown[]) => generateAiShaderMock(...args),
 }));
 
-vi.mock("../../services/secure-storage", () => ({
-  getSecret: (...args: unknown[]) => getSecretMock(...args),
-  isSessionUnlocked: (...args: unknown[]) => isSessionUnlockedMock(...args),
-  onSessionLock: () => undefined,
-}));
-
-vi.mock("../../services/agent/llm-transport", () => ({
-  makeBYOKClient: (...args: unknown[]) => makeBYOKClientMock(...args),
+vi.mock("../../services/agent/zyraxon-transport", () => ({
+  makeZyraxonClient: (...args: unknown[]) => makeZyraxonClientMock(...args),
 }));
 
 import { GenerateShaderBox } from "./GenerateShaderBox";
@@ -44,22 +37,13 @@ function sampleDef(): MotionShaderDef {
 describe("GenerateShaderBox", () => {
   beforeEach(() => {
     generateAiShaderMock.mockReset();
-    getSecretMock.mockReset();
-    isSessionUnlockedMock.mockReset();
-    makeBYOKClientMock.mockReset();
+    makeZyraxonClientMock.mockReset();
     clearGeneratedMotionShaders();
 
-    isSessionUnlockedMock.mockReturnValue(true);
-    getSecretMock.mockResolvedValue("sk-test-key");
-    makeBYOKClientMock.mockReturnValue({
+    makeZyraxonClientMock.mockReturnValue({
       complete: vi.fn().mockResolvedValue({ text: "{}", toolUses: [], stopReason: "end_turn" }),
     });
-    useSettingsStore.setState({
-      defaultLlmProvider: "openai-compatible",
-      llmBaseUrl: "https://gateway.example/v1",
-      llmModel: "tool-capable-model",
-      configuredServices: ["openai-compatible"],
-    });
+    useAIConnectionStore.setState({ model: pickDefaultModel() });
 
     useProjectStore.setState({
       hasOpenProject: true,
@@ -95,40 +79,16 @@ describe("GenerateShaderBox", () => {
     expect(generateAiShaderMock.mock.calls[0][0]).toBe("holographic foil");
     expect(generateAiShaderMock.mock.calls[0][1]).toBe("fill");
     expect(getMotionShaderDef(def.id)?.id).toBe(def.id);
+    expect(makeZyraxonClientMock).toHaveBeenCalledWith({ model: pickDefaultModel() });
 
     const project = useProjectStore.getState().project;
     expect((project.generatedShaders ?? []).some((entry) => entry.id === def.id)).toBe(true);
   });
 
-  it("shows the provider guard and does not call generate when no key", async () => {
-    getSecretMock.mockResolvedValue(null);
-    const onGenerated = vi.fn();
-
-    render(<GenerateShaderBox category="fill" onGenerated={onGenerated} />);
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Describe a shader, e.g. holographic foil" }), {
-      target: { value: "holographic foil" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Generate shader" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Configure an AI provider in settings")).toBeTruthy();
-    });
-
-    expect(generateAiShaderMock).not.toHaveBeenCalled();
-    expect(onGenerated).not.toHaveBeenCalled();
-  });
-
-  it("supports a keyless OpenAI-compatible shader model", async () => {
+  it("uses the model currently chosen in the chat box", async () => {
     const def = sampleDef();
     generateAiShaderMock.mockResolvedValue({ ok: true, def });
-    isSessionUnlockedMock.mockReturnValue(false);
-    useSettingsStore.setState({
-      defaultLlmProvider: "openai-compatible",
-      llmBaseUrl: "http://localhost:11434/v1",
-      llmModel: "qwen2.5-coder",
-      configuredServices: [],
-    });
+    useAIConnectionStore.setState({ model: "zyraxon-codex" });
 
     render(<GenerateShaderBox category="fill" onGenerated={vi.fn()} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Describe a shader, e.g. holographic foil" }), {
@@ -137,30 +97,24 @@ describe("GenerateShaderBox", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate shader" }));
 
     await waitFor(() => expect(generateAiShaderMock).toHaveBeenCalledOnce());
-    expect(getSecretMock).not.toHaveBeenCalled();
-    expect(makeBYOKClientMock).toHaveBeenCalledWith({
-      provider: "openai-compatible",
-      model: "qwen2.5-coder",
-      apiKey: "",
-      baseUrl: "http://localhost:11434/v1",
-    });
+    expect(makeZyraxonClientMock).toHaveBeenCalledWith({ model: "zyraxon-codex" });
   });
 
-  it("surfaces the service error", async () => {
-    generateAiShaderMock.mockResolvedValue({ ok: false, error: "shader failed to compile" });
+  it("guards when no model is selected", async () => {
     const onGenerated = vi.fn();
+    useAIConnectionStore.setState({ model: "" });
 
-    render(<GenerateShaderBox category="effect" onGenerated={onGenerated} />);
-
+    render(<GenerateShaderBox category="fill" onGenerated={onGenerated} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Describe a shader, e.g. holographic foil" }), {
-      target: { value: "chromatic aberration" },
+      target: { value: "holographic foil" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Generate shader" }));
 
     await waitFor(() => {
-      expect(screen.getByText("shader failed to compile")).toBeTruthy();
+      expect(screen.getByText("Pick a ZYRAXON model in the chat box")).toBeTruthy();
     });
 
+    expect(generateAiShaderMock).not.toHaveBeenCalled();
     expect(onGenerated).not.toHaveBeenCalled();
   });
 });

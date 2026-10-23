@@ -1,210 +1,146 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ToolcraftButton as Button } from "@openreel/ui";
 import {
-  AI_PROVIDER_PRESETS,
-  modelsForProvider,
-  providerPreset,
-  type AIProviderId,
+  ZYRAXON_MODELS,
+  ZYRAXON_BASE_URL,
+  pickDefaultModel,
   type AIModelOption,
 } from "../../../stores/ai-provider-catalog";
 import { useAIConnectionStore } from "../../../stores/ai-connection-store";
-import { discoverCompatibleModels } from "../../../services/agent/model-discovery";
+import { listModels, type ZyraxonModelRecord } from "../../../services/zyraxon";
+import { useSpeechSettingsStore } from "../../../stores/speech-settings-store";
+import { DICTATION_LANGUAGES } from "../../../config/dictation-languages";
+import { VoicePicker } from "./VoicePicker";
 
-const inputClass = "mt-1.5 w-full rounded-md border border-border bg-bg-2 px-3 py-2 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50";
+const inputClass =
+  "mt-1.5 w-full rounded-md border border-border bg-bg-2 px-3 py-2 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50";
 
-const MODALITY_BADGE: Record<string, string> = {
-  text: "text", image: "image", video: "video", audio: "audio", pdf: "pdf",
-};
+function fromGateway(record: ZyraxonModelRecord): AIModelOption {
+  return {
+    id: record.id,
+    label: record.displayName || record.id,
+    description: record.description,
+    contextWindow: record.contextWindow,
+    maxOutputTokens: record.maxOutputTokens,
+    inputModalities: record.inputModalities as AIModelOption["inputModalities"],
+    routedModalities: record.routedModalities as AIModelOption["routedModalities"],
+  };
+}
 
+/**
+ * ZYRAXON connection settings.
+ *
+ * There is no provider dropdown, no base URL and no key: the gateway is a
+ * permanent constant and is keyless. What the user can change is the model,
+ * the dictation language and the narration voice.
+ */
 export function AIConnectionPanel({ disabled = false }: { disabled?: boolean }) {
-  const connection = useAIConnectionStore();
-  const preset = providerPreset(connection.provider);
-  const known = modelsForProvider(connection.provider);
+  const model = useAIConnectionStore((s) => s.model);
+  const setModel = useAIConnectionStore((s) => s.setModel);
+  const dictationLanguage = useSpeechSettingsStore((s) => s.dictationLanguage);
+  const setDictationLanguage = useSpeechSettingsStore((s) => s.setDictationLanguage);
   const [live, setLive] = useState<readonly AIModelOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
-  // Live-discovered models belong to the endpoint, so drop them on any change
-  // of provider or URL rather than showing another endpoint's catalogue.
   useEffect(() => {
-    setLive([]);
     setStatus(null);
-  }, [connection.provider, connection.baseUrl]);
+  }, [model]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  const models: readonly AIModelOption[] = live.length ? live : known;
-  const options = models.some((m) => m.id === connection.model) || !connection.model
-    ? models
-    : [{ id: connection.model, label: connection.model, inputModalities: ["text"] as const }, ...models];
-
-  const chooseProvider = useCallback(
-    (provider: AIProviderId) => {
-      const next = providerPreset(provider);
-      connection.configure({
-        provider,
-        baseUrl: next.baseUrl,
-        model: next.defaultModel,
-        apiKey: "",
-      });
-      setStatus(null);
-    },
-    [connection],
-  );
+  const options = live.length ? live : ZYRAXON_MODELS;
+  const selected = options.find((option) => option.id === model);
+  const defaultModel = pickDefaultModel();
 
   const loadModels = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
     setLoading(true);
     setStatus(null);
     try {
-      const discovered = await discoverCompatibleModels({
-        provider: preset.wire === "anthropic" ? "anthropic-compatible" : "openai-compatible",
-        baseUrl: connection.baseUrl,
-        apiKey: connection.apiKey,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      setLive(discovered.map((m) => ({ id: m.id, label: m.label, inputModalities: ["text"] as const })));
-      setStatus(`Loaded ${discovered.length} model${discovered.length === 1 ? "" : "s"} from the endpoint.`);
-      if (discovered.length && !discovered.some((m) => m.id === connection.model)) {
-        connection.configure({ model: discovered[0].id });
+      const records = await listModels();
+      if (!records.length) {
+        setStatus("The gateway returned no models.");
+        return;
       }
+      setLive(records.map(fromGateway));
+      setStatus(`Loaded ${records.length} live models.`);
     } catch (error) {
-      if (controller.signal.aborted) return;
-      setStatus(error instanceof Error ? error.message : "Could not load models.");
+      setStatus(error instanceof Error ? error.message : "Could not read the catalogue.");
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      setLoading(false);
     }
-  }, [connection, preset.wire]);
+  }, []);
 
-  const selected = options.find((m) => m.id === connection.model);
+  const routed = selected?.routedModalities ?? selected?.inputModalities ?? ["text"];
 
   return (
     <div className="space-y-4 text-xs">
-      <label className="block text-fg-2">Provider
-        <select
-          aria-label="AI provider"
-          className={inputClass}
-          disabled={disabled}
-          value={connection.provider}
-          onChange={(e) => chooseProvider(e.target.value as AIProviderId)}
-        >
-          {AI_PROVIDER_PRESETS.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}{option.keyless ? " · no key" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {preset.note && (
-        <p className="rounded-md border border-border bg-bg-2/60 px-2.5 py-2 text-[11px] leading-relaxed text-fg-muted">
-          {preset.note}
+      <div className="rounded-md border border-border bg-bg-2/60 px-2.5 py-2 text-[11px] leading-relaxed text-fg-muted">
+        <p className="font-medium text-fg-2">ZYRAXON — permanent, no key</p>
+        <p className="mt-0.5">
+          The gateway is built in and always on. You choose the model; nothing else needs configuring.
         </p>
-      )}
+        <p className="mt-0.5 font-mono text-[10px] break-all text-fg-muted">{ZYRAXON_BASE_URL}</p>
+      </div>
 
       <div>
         <div className="flex items-end gap-2">
-          <label className="block flex-1 text-fg-2">Model
+          <label className="block flex-1 text-fg-2">Editing model
             <select
-              aria-label="AI model ID"
+              aria-label="ZYRAXON model"
               className={inputClass}
               disabled={disabled}
-              value={connection.model}
-              onChange={(e) => connection.configure({ model: e.target.value })}
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
             >
-              {!connection.model && <option value="">Choose a model…</option>}
               {options.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.label}{option.label !== option.id ? ` — ${option.id}` : ""}
+                  {option.label}{option.id === defaultModel ? " (recommended)" : ""}
                 </option>
               ))}
             </select>
           </label>
           <Button
-            label={loading ? "Loading…" : "Load models"}
+            label={loading ? "Reading…" : "Refresh"}
             variant="secondary"
             size="sm"
             onClick={() => void loadModels()}
-            isDisabled={disabled || loading || !connection.baseUrl.trim()}
+            isDisabled={disabled || loading}
             className="mb-0.5 shrink-0"
           />
         </div>
-        {selected && (selected.description || selected.inputModalities.length) && (
+        {selected && (
           <p className="mt-1.5 text-[11px] leading-relaxed text-fg-muted">
             {selected.description}
-            {selected.inputModalities.length > 1 && (
-              <>
-                {selected.description ? " · " : ""}
-                reads {selected.inputModalities.map((m) => MODALITY_BADGE[m] ?? m).join(", ")}
-              </>
-            )}
+            {selected.description ? " · " : ""}
+            routes {routed.join(", ")}
             {selected.contextWindow ? ` · ${(selected.contextWindow / 1000).toFixed(0)}K context` : ""}
           </p>
         )}
-        <label className="mt-2 block text-fg-2">Custom model ID
-          <input
-            aria-label="Custom model ID"
-            className={inputClass}
-            disabled={disabled}
-            value={connection.model}
-            placeholder="type any model id the endpoint serves"
-            onChange={(e) => connection.configure({ model: e.target.value })}
-            spellCheck={false}
-          />
-        </label>
       </div>
 
-      <label className="block text-fg-2">Base URL
-        <input
-          aria-label="AI base URL"
+      <label className="block text-fg-2">Dictation language
+        <select
+          aria-label="Dictation language"
           className={inputClass}
           disabled={disabled}
-          value={connection.baseUrl}
-          onChange={(e) => connection.configure({ baseUrl: e.target.value })}
-          spellCheck={false}
-        />
+          value={dictationLanguage}
+          onChange={(event) => setDictationLanguage(event.target.value)}
+        >
+          {DICTATION_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.label}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[11px] leading-relaxed text-fg-muted">
+          The microphone transcribes in this language. You can also switch it beside the mic.
+        </span>
       </label>
 
-      <label className="block text-fg-2">
-        {preset.keyless ? "API key (optional)" : "Session API key"}
-        <input
-          aria-label="Session API key"
-          type="password"
-          autoComplete="off"
-          className={inputClass}
-          disabled={disabled}
-          value={connection.apiKey}
-          placeholder={preset.keyless ? "not needed for this provider" : "paste your key"}
-          onChange={(e) => connection.configure({ apiKey: e.target.value })}
-        />
-      </label>
-
-      <div className="flex flex-wrap items-center gap-3">
-        {connection.apiKey && (
-          <button type="button" disabled={disabled} className="text-accent underline" onClick={connection.forgetKey}>
-            Forget key
-          </button>
-        )}
-        {preset.keyUrl && (
-          <a href={preset.keyUrl} target="_blank" rel="noreferrer noopener" className="text-accent underline">
-            Get an API key
-          </a>
-        )}
-      </div>
+      <VoicePicker disabled={disabled} />
 
       {status && (
         <p role="status" className="text-[11px] leading-relaxed text-fg-muted">{status}</p>
       )}
-
-      <p className="text-[11px] leading-relaxed text-fg-muted">
-        Your key stays in this tab and clears on reload. Attachments you add are sent straight to the
-        selected model, so a vision model can look at a frame and an audio-capable model can hear a
-        clip. Local endpoints can work without a key.
-      </p>
     </div>
   );
 }

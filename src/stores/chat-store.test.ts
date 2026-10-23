@@ -3,21 +3,15 @@ import type { RunTurnInput, RunTurnResult } from "@openreel/agent";
 
 const h = vi.hoisted(() => ({
   runTurn: vi.fn(),
-  connection: { provider: "compatible", model: "account-tool-model", baseUrl: "https://gateway.example/v1", apiKey: "test-key" },
+  connection: { provider: "zyraxon", model: "zyraxon-visionary" },
   toOpenAITools: vi.fn((_names: Iterable<string>) => []),
   getTool: vi.fn((_name: string): { domain: string } => ({ domain: "read" })),
   selectToolsForPrompt: vi.fn((_context: string): string[] => []),
-  getSecret: vi.fn(async () => "test-key"),
-  isSessionUnlocked: vi.fn(() => true),
-  makeBYOKClient: vi.fn(() => ({ complete: vi.fn() })),
+  makeZyraxonClient: vi.fn(() => ({ complete: vi.fn() })),
   undo: vi.fn(async () => ({ success: true })),
   projectState: { hasOpenProject: true, projectId: "project-a" },
   undoStackSize: 0,
   settings: {
-    defaultLlmProvider: "openai-compatible" as string | null,
-    llmBaseUrl: "https://gateway.example/v1",
-    llmModel: "account-tool-model",
-    configuredServices: ["openai-compatible"] as string[],
     agentAutoConfirm: false,
     agentDryRun: false,
   },
@@ -32,26 +26,14 @@ vi.mock("@openreel/agent", () => ({
   selectToolsForPrompt: h.selectToolsForPrompt,
 }));
 
-vi.mock("../services/secure-storage", () => ({
-  isSessionUnlocked: h.isSessionUnlocked,
-  getSecret: h.getSecret,
-}));
-
 vi.mock("../services/agent/live-host", () => ({
   LiveEditorHost: class {},
 }));
 
-vi.mock("../services/agent/direct-llm-transport", () => ({ makeDirectBYOKClient: h.makeBYOKClient, validateAIEndpoint: (url: string) => url.replace(/\/(chat\/completions|messages)\/?$/, "").replace(/\/+$/, "") }));
+vi.mock("../services/agent/zyraxon-transport", () => ({ makeZyraxonClient: h.makeZyraxonClient }));
 vi.mock("../services/agent/editing-session", () => ({ EditingSession: class { committed = true; } }));
 vi.mock("../services/agent/editing-tools", () => ({ editingToolDefs: () => [], editingToolReadOnly: () => false, executeEditingTool: vi.fn(), EDITING_SYSTEM: "system" }));
 vi.mock("./ai-connection-store", () => ({ useAIConnectionStore: { getState: () => h.connection } }));
-vi.mock("./ai-provider-catalog", () => ({
-  isKnownProviderId: (value: unknown) =>
-    typeof value === "string" && ["openai", "anthropic", "zyraxon", "compatible"].includes(value),
-  isKeyless: (value: string) => value === "compatible" || value === "zyraxon",
-  resolveWire: (value: string) => (value === "anthropic" ? "anthropic" : "openai"),
-}));
-
 vi.mock("./settings-store", () => ({
   useSettingsStore: {
     getState: () => h.settings,
@@ -93,16 +75,11 @@ describe("chat-store", () => {
     store().reset();
     useChatHistoryStore.getState().clearHistory();
     vi.clearAllMocks();
-    h.getSecret.mockResolvedValue("test-key");
-    h.isSessionUnlocked.mockReturnValue(true);
     h.undo.mockResolvedValue({ success: true });
     h.projectState.hasOpenProject = true;
     h.projectState.projectId = "project-a";
-    Object.assign(h.connection, { provider: "compatible", model: "account-tool-model", baseUrl: "https://gateway.example/v1", apiKey: "test-key" });
-    h.connection.provider = "compatible";
-    h.connection.baseUrl = "https://gateway.example/v1";
-    h.connection.model = "account-tool-model";
-    h.settings.configuredServices = ["openai-compatible"];
+    h.connection.provider = "zyraxon";
+    h.connection.model = "zyraxon-visionary";
     h.settings.agentAutoConfirm = false;
     h.settings.agentDryRun = false;
     h.undoStackSize = 0;
@@ -118,12 +95,6 @@ describe("chat-store", () => {
     expect(store().status).toBe("idle");
   });
 
-  it("refuses to run when a required session key is missing", async () => {
-    h.connection.provider = "openai"; h.connection.apiKey = "";
-    await store().send("hello");
-    expect(h.runTurn).not.toHaveBeenCalled();
-    expect(store().error).toMatch(/session API key/i);
-  });
 
   it("ignores empty input", async () => {
     await store().send("   ");
@@ -250,15 +221,15 @@ describe("chat-store", () => {
       );
 
     await store().send("first");
-    expect(store().messages.at(-1)?.notice).toMatch(/empty response/i);
+    expect(store().messages.at(-1)?.notice).toMatch(/কোনো উত্তর দেয়নি/);
 
     await store().send("second");
     expect(store().messages.at(-1)?.text).toBe("Partial");
-    expect(store().messages.at(-1)?.notice).toMatch(/response or token limit/i);
+    expect(store().messages.at(-1)?.notice).toMatch(/টোকেন সীমায়/);
   });
 
-  it("passes a custom provider model ID through to the BYOK client", async () => {
-    h.connection.model = "gpt-custom-account-model";
+  it("passes the chosen ZYRAXON model to the client", async () => {
+    h.connection.model = "zyraxon-codex";
     h.runTurn.mockImplementation(
       impl(async ({ messages }) => ({
         text: "ok",
@@ -271,90 +242,9 @@ describe("chat-store", () => {
 
     await store().send("hello");
 
-    expect(h.makeBYOKClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "compatible",
-        model: "gpt-custom-account-model",
-      }),
+    expect(h.makeZyraxonClient).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "zyraxon-codex" }),
     );
-  });
-
-  it("runs against a keyless OpenAI-compatible endpoint", async () => {
-    Object.assign(h.connection, { provider: "compatible", model: "account-tool-model", baseUrl: "https://gateway.example/v1", apiKey: "test-key" });
-    h.connection.provider = "compatible";
-    h.connection.baseUrl = "http://localhost:11434/v1/";
-    h.connection.model = "llama3.2";
-    h.settings.configuredServices = []; h.connection.apiKey = "";
-    h.runTurn.mockImplementation(
-      impl(async ({ messages }) => ({
-        text: "ok",
-        messages,
-        toolCalls: 0,
-        stoppedReason: "end_turn",
-        committed: true,
-      })),
-    );
-
-    await store().send("hello local model");
-
-    expect(h.getSecret).not.toHaveBeenCalled();
-    expect(h.makeBYOKClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "compatible",
-        model: "llama3.2",
-        baseUrl: "http://localhost:11434/v1",
-        apiKey: "",
-      }),
-    );
-    expect(h.runTurn).toHaveBeenCalledOnce();
-  });
-
-  it("blocks a compatible provider until endpoint and model are configured", async () => {
-    Object.assign(h.connection, { provider: "compatible", model: "account-tool-model", baseUrl: "https://gateway.example/v1", apiKey: "test-key" });
-    h.connection.provider = "compatible";
-    h.connection.model = "";
-
-    await store().send("hello");
-
-    expect(h.runTurn).not.toHaveBeenCalled();
-    expect(store().error).toMatch(/model id/i);
-  });
-
-  it("requires the user to choose a provider", async () => {
-    h.connection.provider = "";
-
-    await store().send("hello");
-
-    expect(h.runTurn).not.toHaveBeenCalled();
-    expect(store().error).toMatch(/choose a provider/i);
-  });
-
-  it("runs against an Anthropic-compatible endpoint", async () => {
-    h.connection.provider = "anthropic";
-    h.connection.baseUrl = "https://anthropic-gateway.example/v1/messages";
-    h.connection.model = "gateway/claude-tool-model";
-    h.settings.configuredServices = []; h.connection.apiKey = "test-key";
-    h.runTurn.mockImplementation(
-      impl(async ({ messages }) => ({
-        text: "ok",
-        messages,
-        toolCalls: 0,
-        stoppedReason: "end_turn",
-        committed: true,
-      })),
-    );
-
-    await store().send("hello compatible model");
-
-    expect(h.makeBYOKClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "anthropic",
-        model: "gateway/claude-tool-model",
-        baseUrl: "https://anthropic-gateway.example/v1",
-        apiKey: "test-key",
-      }),
-    );
-    expect(h.runTurn).toHaveBeenCalledOnce();
   });
 
   it("clears the conversation when the open project changes", async () => {
@@ -487,7 +377,7 @@ describe("chat-store", () => {
     }));
     await store().send("add transition");
     expect(store().messages.at(-1)?.toolCalls[0].status).toBe("error");
-    expect(store().messages.at(-1)?.text).toContain("No edits were applied");
+    expect(store().messages.at(-1)?.text).toContain("কোনো এডিট প্রয়োগ করা হয়নি");
   });
 
   it("gates destructive calls through pendingConfirm", async () => {

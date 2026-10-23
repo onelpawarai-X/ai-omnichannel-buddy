@@ -15,7 +15,6 @@ import { ChatHistoryPanel } from "./ChatHistoryPanel";
 import { ChatModelPicker } from "./ChatModelPicker";
 import { EditSharingPanel } from "./EditSharingPanel";
 import { useAIConnectionStore } from "../../../stores/ai-connection-store";
-import { isKeyless } from "../../../stores/ai-provider-catalog";
 
 const SUGGESTIONS: ReadonlyArray<string> = [
   "Add a title that says 'Welcome' for the first 3 seconds",
@@ -32,10 +31,7 @@ function EmptyState({
   const send = useChatStore((s) => s.send);
   const connection = useAIConnectionStore();
   const openSettings = useSettingsStore((s) => s.openSettings);
-  const ready =
-      !!connection.baseUrl.trim() &&
-      !!connection.model.trim() &&
-      (!!connection.apiKey || isKeyless(connection.provider));
+  const ready = !!connection.model.trim();
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-2 text-center">

@@ -1,29 +1,51 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AIConnectionPanel } from "./AIConnectionPanel";
-import { AI_PROVIDER_DEFAULTS, useAIConnectionStore } from "../../../stores/ai-connection-store";
+import {
+  ZYRAXON_MODELS,
+  pickDefaultModel,
+} from "../../../stores/ai-provider-catalog";
+import { useAIConnectionStore } from "../../../stores/ai-connection-store";
+import { useSpeechSettingsStore } from "../../../stores/speech-settings-store";
 
-beforeEach(() => useAIConnectionStore.getState().configure({ provider: "openai", ...AI_PROVIDER_DEFAULTS.openai, apiKey: "" }));
-afterEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  useAIConnectionStore.setState({ model: pickDefaultModel() });
+  useSpeechSettingsStore.setState({ dictationLanguage: "bn-BD" });
+});
 
-describe("AI settings session connections", () => {
-  it("accepts custom model IDs and localhost endpoints with a keyless compatible adapter", () => {
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("ZYRAXON connection settings", () => {
+  it("offers every catalogue model with no provider or key controls", () => {
     render(<AIConnectionPanel />);
-    fireEvent.change(screen.getByLabelText("AI provider"), { target: { value: "compatible" } });
-    fireEvent.change(screen.getByLabelText("AI base URL"), { target: { value: "http://localhost:11434/v1" } });
-    fireEvent.change(screen.getByLabelText("Custom model ID"), { target: { value: "my-custom/model" } });
-    expect(useAIConnectionStore.getState()).toMatchObject({ provider: "compatible", baseUrl: "http://localhost:11434/v1", model: "my-custom/model", apiKey: "" });
+    const select = screen.getByLabelText("ZYRAXON model");
+    for (const option of ZYRAXON_MODELS) {
+      expect(screen.getByRole("option", { name: new RegExp(option.label) })).toBeInTheDocument();
+    }
+    expect(select).toHaveValue(pickDefaultModel());
+    expect(screen.queryByLabelText(/api key/i)).toBeNull();
+    expect(screen.queryByLabelText(/base url/i)).toBeNull();
+    expect(screen.queryByLabelText(/provider/i)).toBeNull();
   });
-  it("masks and forgets the session key without writing credentials to browser storage", () => {
-    const saved = vi.spyOn(Storage.prototype, "setItem");
+
+  it("changes the editing model and remembers it", () => {
     render(<AIConnectionPanel />);
-    const key = screen.getByLabelText("Session API key");
-    expect(key).toHaveAttribute("type", "password");
-    fireEvent.change(key, { target: { value: "fixture-session-key" } });
-    expect(useAIConnectionStore.getState().apiKey).toBe("fixture-session-key");
-    expect(saved).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Forget key"));
-    expect(useAIConnectionStore.getState().apiKey).toBe("");
-    expect(saved).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("ZYRAXON model"), {
+      target: { value: "zyraxon-pulse" },
+    });
+    expect(useAIConnectionStore.getState().model).toBe("zyraxon-pulse");
+  });
+
+  it("sets the dictation language, which also repoints the narration voice", () => {
+    render(<AIConnectionPanel />);
+    fireEvent.change(screen.getByLabelText("Dictation language"), {
+      target: { value: "hi-IN" },
+    });
+    expect(useSpeechSettingsStore.getState()).toMatchObject({
+      dictationLanguage: "hi-IN",
+      narrationVoice: "hi-IN-SwaraNeural",
+    });
   });
 });

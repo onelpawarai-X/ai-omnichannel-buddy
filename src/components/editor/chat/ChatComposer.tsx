@@ -2,10 +2,12 @@ import type { JSX } from "react";
 import { useState, useCallback, useRef, type KeyboardEvent, type ClipboardEvent, type DragEvent } from "react";
 import { ToolcraftIconButton as IconButton } from "@openreel/ui";
 import { ToolcraftTextAreaControl } from "@openreel/ui";
-import { Send, Square, Mic, Plus, X, Loader2, Paperclip } from "@/icons/lucide-compat";
+import { Send, Square, Mic, Plus, X, Loader2, Paperclip, Languages } from "@/icons/lucide-compat";
 import { useChatStore } from "../../../stores/chat-store";
 import { useAIConnectionStore } from "../../../stores/ai-connection-store";
-import { modalitiesFor, providerPreset, type AIModality } from "../../../stores/ai-provider-catalog";
+import { useSpeechSettingsStore } from "../../../stores/speech-settings-store";
+import { modalitiesFor } from "../../../stores/ai-provider-catalog";
+import { DICTATION_LANGUAGES } from "../../../config/dictation-languages";
 import { useDictation } from "../../../hooks/useDictation";
 import {
   classifyFile,
@@ -29,8 +31,11 @@ export function ChatComposer(): JSX.Element {
   const stop = useChatStore((s) => s.stop);
   const provider = useAIConnectionStore((s) => s.provider);
   const model = useAIConnectionStore((s) => s.model);
+  const dictationLanguage = useSpeechSettingsStore((s) => s.dictationLanguage);
+  const setDictationLanguage = useSpeechSettingsStore((s) => s.setDictationLanguage);
 
   const [text, setText] = useState("");
+  const [interim, setInterim] = useState("");
   const [attachments, setAttachments] = useState<readonly PendingAttachment[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -40,44 +45,48 @@ export function ChatComposer(): JSX.Element {
 
   const allowed = modalitiesFor(provider, model);
 
-  const appendTranscript = useCallback((chunk: string) => {
+  // A finished phrase joins the committed text; the live tail is shown but
+  // never sent, so a half-heard word can't reach the model.
+  const onFinal = useCallback((chunk: string) => {
+    setInterim("");
     setText((current) => (current ? `${current} ${chunk}` : chunk));
   }, []);
-  const dictation = useDictation(appendTranscript);
+  const onInterim = useCallback((chunk: string) => setInterim(chunk), []);
+  const dictation = useDictation({
+    lang: dictationLanguage,
+    onFinal,
+    onInterim,
+  });
+
+  const displayText = interim ? (text ? `${text} ${interim}` : interim) : text;
 
   const addFiles = useCallback(
     async (files: readonly File[]) => {
       if (!files.length) return;
       setReading(true);
       try {
-        const kindOf = (file: File): AIModality | null => classifyFile(file);
         const accepted = files.filter((file) => {
-          const kind = kindOf(file);
+          const kind = classifyFile(file);
           return kind !== null && allowed.includes(kind);
         });
         const rejected = files.filter((file) => {
-          const kind = kindOf(file);
+          const kind = classifyFile(file);
           return kind === null || !allowed.includes(kind);
         });
         const { staged, rejected: unreadable } = await stageFiles(accepted);
         const problems = [...rejected, ...unreadable];
         if (problems.length) {
           const names = problems.map((f) => (typeof f === "string" ? f : f.name)).join(", ");
-          const label = providerPreset(provider).label;
-          setNotice(
-            `${label} · ${model || "this model"} cannot read: ${names}. Allowed: ${allowed.join(", ")}.`,
-          );
+          setNotice(`ZYRAXON · ${model || "এই মডেল"} এই ফাইল পড়তে পারে না: ${names}। যা পাঠানো যাবে: ${allowed.join(", ")}।`);
         } else {
           setNotice(null);
         }
-        if (staged.length) {
-          setAttachments((current) => [...current, ...staged]);
-        }
+        if (staged.length) setAttachments((current) => [...current, ...staged]);
       } finally {
         setReading(false);
       }
     },
-    [allowed, model, provider],
+    [allowed, model],
   );
 
   const removeAttachment = useCallback((id: string) => {
@@ -92,6 +101,7 @@ export function ChatComposer(): JSX.Element {
       return { kind: item.kind as LoopUserAttachment["kind"], mediaType, data, name: item.file.name };
     });
     setText("");
+    setInterim("");
     setAttachments([]);
     setNotice(null);
     void send(value, payload);
@@ -178,8 +188,11 @@ export function ChatComposer(): JSX.Element {
         <ToolcraftTextAreaControl
           label="AI edit request"
           isLabelHidden
-          value={text}
-          onChange={setText}
+          value={displayText}
+          onChange={(value) => {
+            setInterim("");
+            setText(value);
+          }}
           onKeyDown={onKeyDown}
           rows={2}
           placeholder={dictation.listening ? "Listening… speak now" : "Ask the AI to edit your video…"}
@@ -243,9 +256,27 @@ export function ChatComposer(): JSX.Element {
       />
 
       <div className="mt-1 flex items-center justify-between gap-2 px-1 text-[10px] text-fg-muted">
-        <span>Enter to send · Shift+Enter for a new line</span>
+        <span className="flex items-center gap-1.5">
+          <Languages size={10} aria-hidden />
+          <label className="sr-only" htmlFor="dictation-language-inline">Dictation language</label>
+          <select
+            id="dictation-language-inline"
+            aria-label="Dictation language"
+            value={dictationLanguage}
+            onChange={(event) => setDictationLanguage(event.target.value)}
+            disabled={busy}
+            className="max-w-[9rem] rounded border border-border bg-bg-2 px-1 py-0.5 text-[10px] text-fg-2 disabled:opacity-50"
+          >
+            {DICTATION_LANGUAGES.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.label}
+              </option>
+            ))}
+          </select>
+          <span className="hidden sm:inline">Enter to send · Shift+Enter for a new line</span>
+        </span>
         <span className="truncate" title={allowed.join(", ")}>
-          {model ? `${model} · ${allowed.join("/")}` : "Pick a model in Settings"}
+          {model ? `${model} · ${allowed.join("/")}` : "Pick a model"}
         </span>
       </div>
     </div>
