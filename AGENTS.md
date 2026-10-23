@@ -116,3 +116,41 @@ web app that used to live in `apps/web`, are both in git history:
 git show 7edf59b:package.json      # the monorepo "openreel" manifest
 ```
 <!-- ZYRAXON:LAYOUT:END -->
+
+## The ZYRAXON gateway is reached through our own origin
+
+Browser code must never call `https://zyraxonai.lovable.app` directly. A
+cross-origin POST that carries a `tools` array never leaves the page — the
+browser aborts it and `fetch` rejects with `TypeError: Failed to fetch`. It
+looks exactly like a dead endpoint, and it is why plain chat "worked" while
+every edit failed: the editing agent always sends `tools`.
+
+Measured against the live gateway from the page:
+
+| Request | Result |
+| --- | --- |
+| no `tools` field | `200`, 10/10 |
+| `tools` present (188 B body) | `Failed to fetch`, 10/10 |
+| no `tools`, 20 KB body | `200` |
+
+Body size is irrelevant. The `tools` field is the trigger.
+
+So all gateway calls go to the relative path `/api/zyraxon/...`, forwarded
+server-side:
+
+- `functions/_lib/zyraxon.ts` — the forwarder: allowlisted routes and methods,
+  8 MB cap, no credential forwarded (the gateway is public), `502` on failure
+  instead of a thrown error.
+- `functions/api/zyraxon/[[catchall]].ts` — Cloudflare Pages Function (prod).
+- `vite-plugins/zyraxon-routes.ts` — Vite middleware (dev), same handler.
+
+`/api/zyraxon/v1/...` maps to `/api/public/zyraxon/v1/...`, and
+`/api/zyraxon/tts...` to `/api/public/tts...`.
+
+A Node test harness has no page origin, so a relative URL cannot resolve.
+`makeZyraxonClient` therefore takes an optional `baseUrl`; the live test pins
+`ZYRAXON_UPSTREAM_URL`. In the browser the default relative path is used.
+
+Dictation does **not** use the gateway. `useDictation` runs the browser's own
+Web Speech API, because the gateway refuses the audio containers a browser
+recording produces. Text-to-speech does go through the gateway.
